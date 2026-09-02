@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "coverage_start": "2017-01-01",
+  "scope": "Eventos corporativos oficiais adicionais necessarios para reproduzir o universo exato do Pine B3 Strategy Live quando a consulta corrente da B3 nao devolve mais o evento historico.",
+  "events": [
+    {
+      "ticker": "PRIO3",
+      "ex_date": "2019-03-06",
+      "last_date_prior": "2019-03-01",
+      "split_ratio": 10.0,
+      "event": "DESDOBRAMENTO 1 PARA 10",
+      "source_authority": "issuer",
+      "source_url": "https://s3.amazonaws.com/mz-filemanager/cecb3d3e-6bd6-4edd-b9b3-3cacde780cac/8a96e7ad-4cd1-41ba-bbd9-9dc4b261ebac_2019.03.01%20-%20Aviso%20Aos%20Acionistas%20de%20Split%20e%20Ratifica%C3%A7%C3%A3o%20Nelson_PT.pdf"
+    }
+  ]
+}
