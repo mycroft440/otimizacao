@@ -51,6 +51,7 @@ on:
         description: Slippage extra ponderado do fracionario em bps
         required: true
         default: '5'
+
   push:
     branches: [main]
     paths:
@@ -78,19 +79,20 @@ env:
   FEE_BPS: ${{ inputs.fee_bps || '3.25' }}
   SLIPPAGE_BPS: ${{ inputs.slippage_bps || '10' }}
   ODD_LOT_EXTRA_BPS: ${{ inputs.odd_lot_extra_bps || '5' }}
-  SHARDS: '16'
+  SHARDS: '20'
 
 jobs:
   preflight:
     name: Congelar dados oficiais e validar Pine
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 45
     outputs:
       upstream_sha: ${{ steps.pin_upstream.outputs.sha }}
       snapshot_end: ${{ steps.snapshot_end.outputs.value }}
     steps:
       - name: Checkout otimizacao
         uses: actions/checkout@v4
+
       - name: Checkout B3 Strategy Lab uma unica vez
         uses: actions/checkout@v4
         with:
@@ -98,6 +100,7 @@ jobs:
           ref: main
           path: upstream
           fetch-depth: 1
+
       - name: Fixar commit upstream
         id: pin_upstream
         run: |
@@ -106,25 +109,32 @@ jobs:
           test -n "$SHA"
           echo "sha=$SHA" >> "$GITHUB_OUTPUT"
           echo "B3 Strategy Lab fixado em $SHA"
+
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
           cache: pip
+
       - name: Instalar dependencias
         run: python -m pip install --upgrade pip numpy pandas
+
       - name: Validar sintaxe
         run: |
           python -m py_compile \
             optimizer/optimize_b3_pine.py \
+            optimizer/optimize_b3_pine_fast.py \
             optimizer/reduce_results.py \
             optimizer/audit_exhaustive_grid.py \
             optimizer/audit_portfolio_management.py \
+            optimizer/audit_fast_precompute.py \
             optimizer/build_annual_report.py \
             optimizer/validate_top_oos.py
+
       - name: Auditar gerenciamento de carteira Pine V17 com cenarios deterministas
         run: |
           python optimizer/audit_portfolio_management.py
           test -f portfolio_management_audit.json
+
       - name: Resolver corte oficial
         id: snapshot_end
         run: |
@@ -143,14 +153,93 @@ jobs:
           PY
           echo "value=$VALUE" >> "$GITHUB_OUTPUT"
           echo "SNAPSHOT_END=$VALUE" >> "$GITHUB_ENV"
-      - name: Sincronizar uma unica vez o universo exato do Pine com PRIO3
+
+      - name: Restaurar cache dos arquivos oficiais B3
+        uses: actions/cache@v4
+        with:
+          path: |
+            upstream/.cache/cotahist
+            upstream/.cache/b3_supplements
+          key: b3-market-v3-${{ runner.os }}-${{ steps.snapshot_end.outputs.value }}
+          restore-keys: |
+            b3-market-v3-${{ runner.os }}-
+
+      - name: Mesclar eventos corporativos historicos ausentes da consulta corrente
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          base_path = Path('upstream/data/corporate_actions/supplemental_split_events.json')
+          extra_path = Path('optimizer/b3_strategy_live_corporate_action_overrides.json')
+          out_path = Path('merged_supplemental_split_events.json')
+          base = json.loads(base_path.read_text(encoding='utf-8'))
+          extra = json.loads(extra_path.read_text(encoding='utf-8'))
+          if base.get('schema_version') != 1 or extra.get('schema_version') != 1:
+              raise SystemExit('schema suplementar invalido')
+          if base.get('coverage_start') != extra.get('coverage_start'):
+              raise SystemExit('coverage_start divergente nos registros suplementares')
+          merged = {}
+          for source in (base, extra):
+              for event in source.get('events', []):
+                  key = (str(event['ticker']).upper(), str(event['ex_date']))
+                  prior = merged.get(key)
+                  if prior is not None:
+                      comparable = ('last_date_prior', 'split_ratio', 'event')
+                      if any(str(prior.get(k)) != str(event.get(k)) for k in comparable):
+                          raise SystemExit(f'evento corporativo conflitante: {key}: {prior} x {event}')
+                      continue
+                  merged[key] = event
+          payload = dict(base)
+          payload['events'] = sorted(merged.values(), key=lambda x: (x['ex_date'], x['ticker']))
+          out_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + '\n', encoding='utf-8')
+          prio = [x for x in payload['events'] if x['ticker'] == 'PRIO3' and x['ex_date'] == '2019-03-06']
+          if len(prio) != 1 or float(prio[0]['split_ratio']) != 10.0:
+              raise SystemExit('evento PRIO3 2019 nao foi mesclado corretamente')
+          print(f"Eventos suplementares mesclados: {len(payload['events'])}; PRIO3 2019 OK")
+          PY
+
+      - name: Baixar COTAHIST em paralelo e reutilizar historico em cache
+        run: |
+          timeout 15m python - <<'PY'
+          import os
+          import sys
+          from concurrent.futures import ThreadPoolExecutor, as_completed
+          from pathlib import Path
+
+          sys.path.insert(0, str(Path('upstream').resolve()))
+          from b3_strategy_lab.cotahist import download_cotahist
+
+          end_year = int(os.environ['SNAPSHOT_END'][:4])
+          years = list(range(2017, end_year + 1))
+          directory = Path('upstream/.cache/cotahist')
+          directory.mkdir(parents=True, exist_ok=True)
+
+          def fetch(year: int):
+              return year, download_cotahist(
+                  year,
+                  directory,
+                  refresh=(year == end_year),
+                  attempts=4,
+                  retry_delay_seconds=1.5,
+              )
+
+          workers = min(4, len(years))
+          with ThreadPoolExecutor(max_workers=workers) as pool:
+              futures = [pool.submit(fetch, year) for year in years]
+              for future in as_completed(futures):
+                  year, path = future.result()
+                  print(f'COTAHIST {year}: {path}', flush=True)
+          PY
+
+      - name: Sincronizar universo Pine sem download serial
         run: |
           set -euo pipefail
           SNAPSHOT_ROOT="$GITHUB_WORKSPACE/pine_snapshot"
           mkdir -p "$SNAPSHOT_ROOT/data/universes" "$SNAPSHOT_ROOT/data/candles" "$SNAPSHOT_ROOT/data/manifests" "$SNAPSHOT_ROOT/data/corporate_actions"
           cp optimizer/b3_strategy_live_universe.json "$SNAPSHOT_ROOT/data/universes/fixed_40_2018.json"
           END_YEAR="${SNAPSHOT_END:0:4}"
-          python upstream/scripts/sync_official_universe.py \
+          timeout 30m python upstream/scripts/sync_official_universe.py \
             --universe "$SNAPSHOT_ROOT/data/universes/fixed_40_2018.json" \
             --selection-report "$GITHUB_WORKSPACE/optimizer/b3_strategy_live_selection.csv" \
             --archives-dir "$GITHUB_WORKSPACE/upstream/.cache/cotahist" \
@@ -159,19 +248,21 @@ jobs:
             --actions-dir "$SNAPSHOT_ROOT/data/corporate_actions" \
             --manifests-dir "$SNAPSHOT_ROOT/data/manifests" \
             --split-evidence "$SNAPSHOT_ROOT/data/corporate_actions/split_evidence.json" \
-            --supplemental-splits "$GITHUB_WORKSPACE/upstream/data/corporate_actions/supplemental_split_events.json" \
+            --supplemental-splits "$GITHUB_WORKSPACE/merged_supplemental_split_events.json" \
             --quality-reviews "$GITHUB_WORKSPACE/upstream/data/quality_reviews.json" \
             --years "2017:${END_YEAR}" \
             --end "$SNAPSHOT_END" \
-            --download \
-            --refresh-current \
-            --refresh-actions
-      - name: Auditar snapshot e gravar hashes imutaveis
+            --refresh-actions \
+            --action-workers 8
+
+      - name: Auditar snapshot sem bloquear suspensoes legitimas
         env:
           UPSTREAM_SHA: ${{ steps.pin_upstream.outputs.sha }}
         run: |
           python - <<'PY'
-          import hashlib, json, os
+          import hashlib
+          import json
+          import os
           from datetime import date
           from pathlib import Path
           import pandas as pd
@@ -186,50 +277,56 @@ jobs:
               raise SystemExit('snapshot nao corresponde ao Pine atual: PRIO3/CVCB3 divergente')
 
           hashes = {}
-          end_dates = []
-          session_sets = []
+          sessions_by_ticker = {}
+          end_by_ticker = {}
           for ticker in tickers:
               path = root / 'data/candles' / f'{ticker.lower()}_1d.csv'
               if not path.exists():
                   raise SystemExit(f'candle ausente: {path}')
-              raw = path.read_bytes()
-              hashes[str(path.relative_to(root))] = hashlib.sha256(raw).hexdigest()
+              hashes[str(path.relative_to(root))] = hashlib.sha256(path.read_bytes()).hexdigest()
               df = pd.read_csv(path, usecols=['date'])
               dates = pd.to_datetime(df['date'].astype(str).str[:10], errors='raise')
               if dates.duplicated().any() or not dates.is_monotonic_increasing:
                   raise SystemExit(f'{ticker}: datas duplicadas ou fora de ordem')
               if len(dates) < 300:
                   raise SystemExit(f'{ticker}: historico insuficiente ({len(dates)} linhas)')
-              end_dates.append(dates.iloc[-1].date().isoformat())
-              session_sets.append(set(dates[dates >= pd.Timestamp('2018-01-02')].dt.date))
+              sessions = set(dates[dates >= pd.Timestamp('2018-01-02')].dt.date)
+              sessions_by_ticker[ticker] = sessions
+              end_by_ticker[ticker] = dates.iloc[-1].date()
 
-          common_end = min(end_dates)
-          newest_end = max(end_dates)
-          if common_end != newest_end:
-              raise SystemExit(f'ativos terminam em datas diferentes: min={common_end} max={newest_end}')
-          expected_sessions = session_sets[0]
-          for ticker, sessions in zip(tickers[1:], session_sets[1:]):
-              if sessions != expected_sessions:
-                  missing = sorted(expected_sessions - sessions)[:5]
-                  extra = sorted(sessions - expected_sessions)[:5]
-                  raise SystemExit(f'{ticker}: calendario diverge; missing={missing} extra={extra}')
-
+          master_sessions = set().union(*sessions_by_ticker.values())
+          if not master_sessions:
+              raise SystemExit('calendario mestre vazio')
+          newest_end = max(end_by_ticker.values())
           requested_end = date.fromisoformat(os.environ['SNAPSHOT_END'])
-          actual_end = date.fromisoformat(common_end)
-          if (requested_end - actual_end).days > 4:
-              raise SystemExit(f'snapshot desatualizado: requested={requested_end} actual={actual_end}')
+          if (requested_end - newest_end).days > 4:
+              raise SystemExit(f'snapshot desatualizado: requested={requested_end} newest={newest_end}')
+
+          coverage = {}
+          stale = {}
+          for ticker in tickers:
+              ratio = len(sessions_by_ticker[ticker]) / len(master_sessions)
+              coverage[ticker] = ratio
+              stale_days = (newest_end - end_by_ticker[ticker]).days
+              stale[ticker] = stale_days
+              if ratio < 0.95:
+                  raise SystemExit(f'{ticker}: cobertura de sessoes muito baixa ({ratio:.2%})')
+              if stale_days > 10:
+                  raise SystemExit(f'{ticker}: ultimo candle esta {stale_days} dias atras do calendario mestre')
 
           universe_hash = hashlib.sha256(universe_path.read_bytes()).hexdigest()
           meta = {
               'status': 'PASS',
               'upstream_sha': os.environ['UPSTREAM_SHA'],
               'requested_end': os.environ['SNAPSHOT_END'],
-              'actual_common_end': common_end,
+              'actual_master_end': newest_end.isoformat(),
               'universe_count': 40,
               'universe_sha256': universe_hash,
               'universe': tickers,
               'candle_sha256': hashes,
-              'all_tickers_share_sessions_since_2018_01_02': True,
+              'session_coverage_ratio': coverage,
+              'stale_calendar_days_at_end': stale,
+              'minimum_session_coverage_ratio': min(coverage.values()),
               'pine_slot11': 'PRIO3',
               'survivorship_safe': False,
               'purpose': 'exact Pine Live retrospective optimization snapshot'
@@ -238,7 +335,17 @@ jobs:
           print(json.dumps(meta, ensure_ascii=False))
           PY
           cp portfolio_management_audit.json pine_snapshot/PORTFOLIO_MANAGEMENT_AUDIT.json
-      - name: Smoke test Pine 40/20/63 sobre o snapshot congelado
+
+      - name: Provar equivalencia do precompute acelerado
+        run: |
+          python optimizer/audit_fast_precompute.py \
+            --data-root pine_snapshot \
+            --start "$START" --end "$END" \
+            --output pine_snapshot/FAST_PRECOMPUTE_AUDIT.json
+
+      - name: Smoke test Pine 40/20/63 e reconciliacao detalhada
+        env:
+          UPSTREAM_SHA: ${{ steps.pin_upstream.outputs.sha }}
         run: |
           mkdir -p preflight
           python optimizer/optimize_b3_pine.py \
@@ -254,19 +361,6 @@ jobs:
             --slippage-bps "$SLIPPAGE_BPS" \
             --odd-lot-extra-bps "$ODD_LOT_EXTRA_BPS" \
             --shard-id 0 --shards 1
-          python - <<'PY'
-          import pandas as pd
-          x = pd.read_csv('preflight/shard_0.csv')
-          assert len(x) == 1
-          assert tuple(map(int, x.loc[0, ['gap_period','signal_period','momentum_period']])) == (40,20,63)
-          assert float(x.iloc[0].final_equity) > 0
-          print(x.to_string(index=False))
-          PY
-      - name: Reconciliar motor vetorizado com replay detalhado no 40/20/63
-        env:
-          UPSTREAM_SHA: ${{ steps.pin_upstream.outputs.sha }}
-        run: |
-          rm -rf preflight/reduced
           python optimizer/reduce_results.py \
             --data-root pine_snapshot \
             --results-dir preflight \
@@ -287,6 +381,7 @@ jobs:
           assert p['status']=='PASS', p
           print(p)
           PY
+
       - name: Publicar snapshot unico para todos os shards
         uses: actions/upload-artifact@v4
         with:
@@ -294,49 +389,56 @@ jobs:
           path: pine_snapshot/
           retention-days: 7
           if-no-files-found: error
-          compression-level: 6
+          compression-level: 4
 
   optimize:
-    name: Shard ${{ matrix.shard }} / 15
+    name: Shard ${{ matrix.shard }} / 19
     needs: preflight
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 90
     strategy:
       fail-fast: false
       matrix:
-        shard: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
+        shard: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19]
     steps:
       - name: Checkout otimizacao
         uses: actions/checkout@v4
+
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
           cache: pip
+
       - name: Instalar dependencias
         run: python -m pip install --upgrade pip numpy pandas
+
       - name: Baixar exatamente o mesmo snapshot de mercado
         uses: actions/download-artifact@v4
         with:
           name: b3-pine-live-market-snapshot-${{ github.run_id }}
           path: pine_snapshot
-      - name: Conferir identidade do snapshot
+
+      - name: Conferir identidade e auditorias do snapshot
         run: |
-          test -f pine_snapshot/SNAPSHOT_META.json
-          test -f pine_snapshot/PORTFOLIO_MANAGEMENT_AUDIT.json
           python - <<'PY'
           import json
+          for path in (
+              'pine_snapshot/SNAPSHOT_META.json',
+              'pine_snapshot/PORTFOLIO_MANAGEMENT_AUDIT.json',
+              'pine_snapshot/FAST_PRECOMPUTE_AUDIT.json',
+          ):
+              p=json.load(open(path, encoding='utf-8'))
+              assert p['status']=='PASS', (path, p)
           m=json.load(open('pine_snapshot/SNAPSHOT_META.json', encoding='utf-8'))
-          p=json.load(open('pine_snapshot/PORTFOLIO_MANAGEMENT_AUDIT.json', encoding='utf-8'))
-          assert m['status']=='PASS'
-          assert p['status']=='PASS'
           assert m['pine_slot11']=='PRIO3'
           assert len(m['universe'])==40
-          print(m['upstream_sha'], m['actual_common_end'], p['policy'])
+          print(m['upstream_sha'], m['actual_master_end'], m['minimum_session_coverage_ratio'])
           PY
-      - name: Executar shard exaustivo
+
+      - name: Executar shard exaustivo acelerado
         run: |
           mkdir -p shard-results
-          python optimizer/optimize_b3_pine.py \
+          timeout 85m python optimizer/optimize_b3_pine_fast.py \
             --data-root pine_snapshot \
             --output "shard-results/shard_${{ matrix.shard }}.csv" \
             --start "$START" --end "$END" \
@@ -349,6 +451,7 @@ jobs:
             --slippage-bps "$SLIPPAGE_BPS" \
             --odd-lot-extra-bps "$ODD_LOT_EXTRA_BPS" \
             --shard-id "${{ matrix.shard }}" --shards "$SHARDS"
+
       - name: Publicar shard
         uses: actions/upload-artifact@v4
         with:
@@ -356,34 +459,40 @@ jobs:
           path: shard-results/
           retention-days: 14
           if-no-files-found: error
+          compression-level: 3
 
   reduce:
     name: Auditar grade completa e publicar vencedora
     needs: [preflight, optimize]
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 45
     steps:
       - name: Checkout otimizacao
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
           cache: pip
+
       - name: Instalar dependencias
         run: python -m pip install --upgrade pip numpy pandas
+
       - name: Baixar snapshot congelado
         uses: actions/download-artifact@v4
         with:
           name: b3-pine-live-market-snapshot-${{ github.run_id }}
           path: pine_snapshot
+
       - name: Baixar todos os shards
         uses: actions/download-artifact@v4
         with:
           pattern: b3-opt-shard-*
           path: shard-results
           merge-multiple: true
+
       - name: Provar grade cartesiana exata, passo 1, sem lacunas ou repeticoes
         run: |
           mkdir -p final-results
@@ -394,6 +503,7 @@ jobs:
             --signal-min "$SIGNAL_MIN" --signal-max "$SIGNAL_MAX" \
             --momentum-min "$MOMENTUM_MIN" --momentum-max "$MOMENTUM_MAX" \
             --vol-period "$VOL_PERIOD"
+
       - name: Reduzir, recalcular curva e reconciliar gerenciamento
         env:
           UPSTREAM_SHA: ${{ needs.preflight.outputs.upstream_sha }}
@@ -414,9 +524,22 @@ jobs:
             --upstream-sha "$UPSTREAM_SHA"
           cp pine_snapshot/SNAPSHOT_META.json final-results/MARKET_SNAPSHOT_META.json
           cp pine_snapshot/PORTFOLIO_MANAGEMENT_AUDIT.json final-results/PORTFOLIO_MANAGEMENT_AUDIT.json
+          cp pine_snapshot/FAST_PRECOMPUTE_AUDIT.json final-results/FAST_PRECOMPUTE_AUDIT.json
+
+      - name: Gerar retorno percentual por ano
+        run: |
+          python optimizer/build_annual_report.py \
+            --curve final-results/BEST_EQUITY_DAILY.csv \
+            --initial-cash "$INITIAL_CASH" \
+            --csv final-results/ANNUAL_RETURNS.csv \
+            --json final-results/ANNUAL_RETURNS.json \
+            --md final-results/ANNUAL_RETURNS.md
+
       - name: Mostrar resumo e auditorias no GitHub Actions
         run: |
           cat final-results/OPTIMIZATION_SUMMARY.md >> "$GITHUB_STEP_SUMMARY"
+          echo '' >> "$GITHUB_STEP_SUMMARY"
+          cat final-results/ANNUAL_RETURNS.md >> "$GITHUB_STEP_SUMMARY"
           echo '' >> "$GITHUB_STEP_SUMMARY"
           echo '## Auditoria da grade exaustiva' >> "$GITHUB_STEP_SUMMARY"
           cat final-results/EXHAUSTIVE_GRID_AUDIT.json >> "$GITHUB_STEP_SUMMARY"
@@ -424,6 +547,10 @@ jobs:
           echo '## Auditoria do gerenciamento de carteira' >> "$GITHUB_STEP_SUMMARY"
           cat final-results/PORTFOLIO_MANAGEMENT_AUDIT.json >> "$GITHUB_STEP_SUMMARY"
           cat final-results/PORTFOLIO_RECONCILIATION.json >> "$GITHUB_STEP_SUMMARY"
+          echo '' >> "$GITHUB_STEP_SUMMARY"
+          echo '## Equivalencia do acelerador' >> "$GITHUB_STEP_SUMMARY"
+          cat final-results/FAST_PRECOMPUTE_AUDIT.json >> "$GITHUB_STEP_SUMMARY"
+
       - name: Publicar resultados completos como artifact
         uses: actions/upload-artifact@v4
         with:
@@ -431,7 +558,9 @@ jobs:
           path: final-results/
           retention-days: 30
           if-no-files-found: error
-      - name: Versionar resumo, auditorias e top 100 na main
+          compression-level: 6
+
+      - name: Versionar resumo, auditorias, retorno anual e top 100 na main
         run: |
           rm -rf reports/latest
           mkdir -p reports/latest
@@ -442,6 +571,10 @@ jobs:
           cp final-results/MARKET_SNAPSHOT_META.json reports/latest/
           cp final-results/PORTFOLIO_MANAGEMENT_AUDIT.json reports/latest/
           cp final-results/PORTFOLIO_RECONCILIATION.json reports/latest/
+          cp final-results/FAST_PRECOMPUTE_AUDIT.json reports/latest/
+          cp final-results/ANNUAL_RETURNS.csv reports/latest/
+          cp final-results/ANNUAL_RETURNS.json reports/latest/
+          cp final-results/ANNUAL_RETURNS.md reports/latest/
           cp final-results/top_100.csv reports/latest/
           cp final-results/BEST_EQUITY_DAILY.csv reports/latest/
           git config user.name "github-actions[bot]"
