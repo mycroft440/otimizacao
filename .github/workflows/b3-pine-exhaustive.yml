@@ -113,7 +113,18 @@ jobs:
       - name: Instalar dependencias
         run: python -m pip install --upgrade pip numpy pandas
       - name: Validar sintaxe
-        run: python -m py_compile optimizer/optimize_b3_pine.py optimizer/reduce_results.py optimizer/audit_exhaustive_grid.py
+        run: |
+          python -m py_compile \
+            optimizer/optimize_b3_pine.py \
+            optimizer/reduce_results.py \
+            optimizer/audit_exhaustive_grid.py \
+            optimizer/audit_portfolio_management.py \
+            optimizer/build_annual_report.py \
+            optimizer/validate_top_oos.py
+      - name: Auditar gerenciamento de carteira Pine V17 com cenarios deterministas
+        run: |
+          python optimizer/audit_portfolio_management.py
+          test -f portfolio_management_audit.json
       - name: Resolver corte oficial
         id: snapshot_end
         run: |
@@ -176,7 +187,6 @@ jobs:
 
           hashes = {}
           end_dates = []
-          starts = []
           session_sets = []
           for ticker in tickers:
               path = root / 'data/candles' / f'{ticker.lower()}_1d.csv'
@@ -190,7 +200,6 @@ jobs:
                   raise SystemExit(f'{ticker}: datas duplicadas ou fora de ordem')
               if len(dates) < 300:
                   raise SystemExit(f'{ticker}: historico insuficiente ({len(dates)} linhas)')
-              starts.append(dates.iloc[0].date().isoformat())
               end_dates.append(dates.iloc[-1].date().isoformat())
               session_sets.append(set(dates[dates >= pd.Timestamp('2018-01-02')].dt.date))
 
@@ -228,6 +237,7 @@ jobs:
           (root / 'SNAPSHOT_META.json').write_text(json.dumps(meta, indent=2, ensure_ascii=False) + '\n', encoding='utf-8')
           print(json.dumps(meta, ensure_ascii=False))
           PY
+          cp portfolio_management_audit.json pine_snapshot/PORTFOLIO_MANAGEMENT_AUDIT.json
       - name: Smoke test Pine 40/20/63 sobre o snapshot congelado
         run: |
           mkdir -p preflight
@@ -251,6 +261,31 @@ jobs:
           assert tuple(map(int, x.loc[0, ['gap_period','signal_period','momentum_period']])) == (40,20,63)
           assert float(x.iloc[0].final_equity) > 0
           print(x.to_string(index=False))
+          PY
+      - name: Reconciliar motor vetorizado com replay detalhado no 40/20/63
+        env:
+          UPSTREAM_SHA: ${{ steps.pin_upstream.outputs.sha }}
+        run: |
+          rm -rf preflight/reduced
+          python optimizer/reduce_results.py \
+            --data-root pine_snapshot \
+            --results-dir preflight \
+            --output-dir preflight/reduced \
+            --start "$START" --end "$END" \
+            --gap-min 40 --gap-max 40 \
+            --signal-min 20 --signal-max 20 \
+            --momentum-min 63 --momentum-max 63 \
+            --vol-period "$VOL_PERIOD" \
+            --initial-cash "$INITIAL_CASH" \
+            --fee-bps "$FEE_BPS" \
+            --slippage-bps "$SLIPPAGE_BPS" \
+            --odd-lot-extra-bps "$ODD_LOT_EXTRA_BPS" \
+            --upstream-sha "$UPSTREAM_SHA"
+          python - <<'PY'
+          import json
+          p=json.load(open('preflight/reduced/PORTFOLIO_RECONCILIATION.json', encoding='utf-8'))
+          assert p['status']=='PASS', p
+          print(p)
           PY
       - name: Publicar snapshot unico para todos os shards
         uses: actions/upload-artifact@v4
@@ -287,13 +322,16 @@ jobs:
       - name: Conferir identidade do snapshot
         run: |
           test -f pine_snapshot/SNAPSHOT_META.json
+          test -f pine_snapshot/PORTFOLIO_MANAGEMENT_AUDIT.json
           python - <<'PY'
           import json
           m=json.load(open('pine_snapshot/SNAPSHOT_META.json', encoding='utf-8'))
+          p=json.load(open('pine_snapshot/PORTFOLIO_MANAGEMENT_AUDIT.json', encoding='utf-8'))
           assert m['status']=='PASS'
+          assert p['status']=='PASS'
           assert m['pine_slot11']=='PRIO3'
           assert len(m['universe'])==40
-          print(m['upstream_sha'], m['actual_common_end'])
+          print(m['upstream_sha'], m['actual_common_end'], p['policy'])
           PY
       - name: Executar shard exaustivo
         run: |
@@ -356,7 +394,7 @@ jobs:
             --signal-min "$SIGNAL_MIN" --signal-max "$SIGNAL_MAX" \
             --momentum-min "$MOMENTUM_MIN" --momentum-max "$MOMENTUM_MAX" \
             --vol-period "$VOL_PERIOD"
-      - name: Reduzir e recalcular curva diaria da vencedora
+      - name: Reduzir, recalcular curva e reconciliar gerenciamento
         env:
           UPSTREAM_SHA: ${{ needs.preflight.outputs.upstream_sha }}
         run: |
@@ -375,12 +413,17 @@ jobs:
             --odd-lot-extra-bps "$ODD_LOT_EXTRA_BPS" \
             --upstream-sha "$UPSTREAM_SHA"
           cp pine_snapshot/SNAPSHOT_META.json final-results/MARKET_SNAPSHOT_META.json
-      - name: Mostrar resumo no GitHub Actions
+          cp pine_snapshot/PORTFOLIO_MANAGEMENT_AUDIT.json final-results/PORTFOLIO_MANAGEMENT_AUDIT.json
+      - name: Mostrar resumo e auditorias no GitHub Actions
         run: |
           cat final-results/OPTIMIZATION_SUMMARY.md >> "$GITHUB_STEP_SUMMARY"
           echo '' >> "$GITHUB_STEP_SUMMARY"
           echo '## Auditoria da grade exaustiva' >> "$GITHUB_STEP_SUMMARY"
           cat final-results/EXHAUSTIVE_GRID_AUDIT.json >> "$GITHUB_STEP_SUMMARY"
+          echo '' >> "$GITHUB_STEP_SUMMARY"
+          echo '## Auditoria do gerenciamento de carteira' >> "$GITHUB_STEP_SUMMARY"
+          cat final-results/PORTFOLIO_MANAGEMENT_AUDIT.json >> "$GITHUB_STEP_SUMMARY"
+          cat final-results/PORTFOLIO_RECONCILIATION.json >> "$GITHUB_STEP_SUMMARY"
       - name: Publicar resultados completos como artifact
         uses: actions/upload-artifact@v4
         with:
@@ -397,6 +440,8 @@ jobs:
           cp final-results/MANIFEST.json reports/latest/
           cp final-results/EXHAUSTIVE_GRID_AUDIT.json reports/latest/
           cp final-results/MARKET_SNAPSHOT_META.json reports/latest/
+          cp final-results/PORTFOLIO_MANAGEMENT_AUDIT.json reports/latest/
+          cp final-results/PORTFOLIO_RECONCILIATION.json reports/latest/
           cp final-results/top_100.csv reports/latest/
           cp final-results/BEST_EQUITY_DAILY.csv reports/latest/
           git config user.name "github-actions[bot]"
