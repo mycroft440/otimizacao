@@ -62,7 +62,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: b3-pine-live-exhaustive
+  group: b3-pine-live-exhaustive-fast-v2
   cancel-in-progress: true
 
 env:
