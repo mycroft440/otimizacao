@@ -1,0 +1,257 @@
+name: B3 Pine Live - Otimizacao Exaustiva
+
+on:
+  workflow_dispatch:
+    inputs:
+      start:
+        description: Data inicial do backtest
+        required: true
+        default: '2018-01-02'
+      end:
+        description: Data final (vazio = ultimo candle versionado)
+        required: false
+        default: ''
+      gap_min:
+        description: GAP_PERIOD minimo
+        required: true
+        default: '5'
+      gap_max:
+        description: GAP_PERIOD maximo
+        required: true
+        default: '80'
+      signal_min:
+        description: SIGNAL_PERIOD minimo
+        required: true
+        default: '2'
+      signal_max:
+        description: SIGNAL_PERIOD maximo
+        required: true
+        default: '60'
+      momentum_min:
+        description: MOMENTUM_PERIOD minimo
+        required: true
+        default: '5'
+      momentum_max:
+        description: MOMENTUM_PERIOD maximo
+        required: true
+        default: '252'
+      initial_cash:
+        description: Capital inicial em reais
+        required: true
+        default: '1000'
+      fee_bps:
+        description: Custo operacional em bps por lado
+        required: true
+        default: '3'
+      slippage_bps:
+        description: Slippage base em bps por lado
+        required: true
+        default: '10'
+      odd_lot_extra_bps:
+        description: Slippage extra ponderado do fracionario em bps
+        required: true
+        default: '5'
+  push:
+    branches: [main]
+    paths:
+      - 'optimizer/**'
+      - '.github/workflows/b3-pine-exhaustive.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: b3-pine-live-exhaustive
+  cancel-in-progress: true
+
+env:
+  START: ${{ inputs.start || '2018-01-02' }}
+  END: ${{ inputs.end || '' }}
+  GAP_MIN: ${{ inputs.gap_min || '5' }}
+  GAP_MAX: ${{ inputs.gap_max || '80' }}
+  SIGNAL_MIN: ${{ inputs.signal_min || '2' }}
+  SIGNAL_MAX: ${{ inputs.signal_max || '60' }}
+  MOMENTUM_MIN: ${{ inputs.momentum_min || '5' }}
+  MOMENTUM_MAX: ${{ inputs.momentum_max || '252' }}
+  VOL_PERIOD: '21'
+  INITIAL_CASH: ${{ inputs.initial_cash || '1000' }}
+  FEE_BPS: ${{ inputs.fee_bps || '3' }}
+  SLIPPAGE_BPS: ${{ inputs.slippage_bps || '10' }}
+  ODD_LOT_EXTRA_BPS: ${{ inputs.odd_lot_extra_bps || '5' }}
+  SHARDS: '16'
+
+jobs:
+  preflight:
+    name: Preflight Pine-equivalent
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout otimizacao
+        uses: actions/checkout@v4
+      - name: Checkout B3 Strategy Lab
+        uses: actions/checkout@v4
+        with:
+          repository: mycroft440/b3-strategy-lab
+          ref: main
+          path: upstream
+          fetch-depth: 1
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - name: Instalar dependencias
+        run: python -m pip install --upgrade pip numpy pandas
+      - name: Validar sintaxe
+        run: python -m py_compile optimizer/optimize_b3_pine.py optimizer/reduce_results.py
+      - name: Smoke test da configuracao Pine 40/20/63
+        run: |
+          mkdir -p preflight
+          python optimizer/optimize_b3_pine.py \
+            --data-root upstream \
+            --output preflight/shard_0.csv \
+            --start "$START" --end "$END" \
+            --gap-min 40 --gap-max 40 \
+            --signal-min 20 --signal-max 20 \
+            --momentum-min 63 --momentum-max 63 \
+            --vol-period "$VOL_PERIOD" \
+            --initial-cash "$INITIAL_CASH" \
+            --fee-bps "$FEE_BPS" \
+            --slippage-bps "$SLIPPAGE_BPS" \
+            --odd-lot-extra-bps "$ODD_LOT_EXTRA_BPS" \
+            --shard-id 0 --shards 1
+          python - <<'PY'
+          import pandas as pd
+          x = pd.read_csv('preflight/shard_0.csv')
+          assert len(x) == 1, len(x)
+          assert int(x.iloc[0].gap_period) == 40
+          assert int(x.iloc[0].signal_period) == 20
+          assert int(x.iloc[0].momentum_period) == 63
+          assert x.iloc[0].final_equity > 0
+          print(x.to_string(index=False))
+          PY
+
+  optimize:
+    name: Shard ${{ matrix.shard }} / 15
+    needs: preflight
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
+    steps:
+      - name: Checkout otimizacao
+        uses: actions/checkout@v4
+      - name: Checkout B3 Strategy Lab
+        uses: actions/checkout@v4
+        with:
+          repository: mycroft440/b3-strategy-lab
+          ref: main
+          path: upstream
+          fetch-depth: 1
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - name: Instalar dependencias
+        run: python -m pip install --upgrade pip numpy pandas
+      - name: Executar shard exaustivo
+        run: |
+          mkdir -p shard-results
+          python optimizer/optimize_b3_pine.py \
+            --data-root upstream \
+            --output "shard-results/shard_${{ matrix.shard }}.csv" \
+            --start "$START" --end "$END" \
+            --gap-min "$GAP_MIN" --gap-max "$GAP_MAX" \
+            --signal-min "$SIGNAL_MIN" --signal-max "$SIGNAL_MAX" \
+            --momentum-min "$MOMENTUM_MIN" --momentum-max "$MOMENTUM_MAX" \
+            --vol-period "$VOL_PERIOD" \
+            --initial-cash "$INITIAL_CASH" \
+            --fee-bps "$FEE_BPS" \
+            --slippage-bps "$SLIPPAGE_BPS" \
+            --odd-lot-extra-bps "$ODD_LOT_EXTRA_BPS" \
+            --shard-id "${{ matrix.shard }}" --shards "$SHARDS"
+      - name: Publicar shard
+        uses: actions/upload-artifact@v4
+        with:
+          name: b3-opt-shard-${{ matrix.shard }}
+          path: shard-results/
+          retention-days: 14
+          if-no-files-found: error
+
+  reduce:
+    name: Auditar e publicar vencedora
+    needs: optimize
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout otimizacao
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Checkout B3 Strategy Lab
+        uses: actions/checkout@v4
+        with:
+          repository: mycroft440/b3-strategy-lab
+          ref: main
+          path: upstream
+          fetch-depth: 1
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - name: Instalar dependencias
+        run: python -m pip install --upgrade pip numpy pandas
+      - name: Baixar todos os shards
+        uses: actions/download-artifact@v4
+        with:
+          pattern: b3-opt-shard-*
+          path: shard-results
+          merge-multiple: true
+      - name: Capturar commit exato do B3 Strategy Lab
+        run: echo "UPSTREAM_SHA=$(git -C upstream rev-parse HEAD)" >> "$GITHUB_ENV"
+      - name: Reduzir, auditar cardinalidade e recalcular curva diaria
+        run: |
+          mkdir -p final-results
+          python optimizer/reduce_results.py \
+            --data-root upstream \
+            --results-dir shard-results \
+            --output-dir final-results \
+            --start "$START" --end "$END" \
+            --gap-min "$GAP_MIN" --gap-max "$GAP_MAX" \
+            --signal-min "$SIGNAL_MIN" --signal-max "$SIGNAL_MAX" \
+            --momentum-min "$MOMENTUM_MIN" --momentum-max "$MOMENTUM_MAX" \
+            --vol-period "$VOL_PERIOD" \
+            --initial-cash "$INITIAL_CASH" \
+            --fee-bps "$FEE_BPS" \
+            --slippage-bps "$SLIPPAGE_BPS" \
+            --odd-lot-extra-bps "$ODD_LOT_EXTRA_BPS" \
+            --upstream-sha "$UPSTREAM_SHA"
+      - name: Mostrar resumo no GitHub Actions
+        run: cat final-results/OPTIMIZATION_SUMMARY.md >> "$GITHUB_STEP_SUMMARY"
+      - name: Publicar resultados completos como artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: b3-pine-live-exhaustive-results
+          path: final-results/
+          retention-days: 30
+          if-no-files-found: error
+      - name: Versionar resumo e top 100 na main
+        run: |
+          rm -rf reports/latest
+          mkdir -p reports/latest
+          cp final-results/OPTIMIZATION_SUMMARY.md reports/latest/
+          cp final-results/BEST.json reports/latest/
+          cp final-results/MANIFEST.json reports/latest/
+          cp final-results/top_100.csv reports/latest/
+          cp final-results/BEST_EQUITY_DAILY.csv reports/latest/
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add reports/latest
+          if git diff --cached --quiet; then
+            echo "Sem alteracoes nos resultados resumidos."
+          else
+            git commit -m "Publish latest B3 Pine optimization [skip ci]"
+            git pull --rebase origin main
+            git push origin HEAD:main
+          fi
