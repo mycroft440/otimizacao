@@ -85,16 +85,26 @@ jobs:
     name: Preflight Pine-equivalent
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    outputs:
+      upstream_sha: ${{ steps.pin_upstream.outputs.sha }}
     steps:
       - name: Checkout otimizacao
         uses: actions/checkout@v4
-      - name: Checkout B3 Strategy Lab
+      - name: Checkout B3 Strategy Lab uma unica vez para fixar snapshot
         uses: actions/checkout@v4
         with:
           repository: mycroft440/b3-strategy-lab
           ref: main
           path: upstream
           fetch-depth: 1
+      - name: Fixar commit upstream para toda a matriz
+        id: pin_upstream
+        run: |
+          set -euo pipefail
+          SHA="$(git -C upstream rev-parse HEAD)"
+          test -n "$SHA"
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+          echo "B3 Strategy Lab fixado em $SHA"
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
@@ -102,7 +112,7 @@ jobs:
       - name: Instalar dependencias
         run: python -m pip install --upgrade pip numpy pandas
       - name: Validar sintaxe
-        run: python -m py_compile optimizer/optimize_b3_pine.py optimizer/reduce_results.py
+        run: python -m py_compile optimizer/optimize_b3_pine.py optimizer/reduce_results.py optimizer/audit_exhaustive_grid.py
       - name: Smoke test da configuracao Pine 40/20/63
         run: |
           mkdir -p preflight
@@ -142,13 +152,19 @@ jobs:
     steps:
       - name: Checkout otimizacao
         uses: actions/checkout@v4
-      - name: Checkout B3 Strategy Lab
+      - name: Checkout exatamente o mesmo B3 Strategy Lab do preflight
         uses: actions/checkout@v4
         with:
           repository: mycroft440/b3-strategy-lab
-          ref: main
+          ref: ${{ needs.preflight.outputs.upstream_sha }}
           path: upstream
           fetch-depth: 1
+      - name: Verificar pin upstream
+        run: |
+          set -euo pipefail
+          ACTUAL="$(git -C upstream rev-parse HEAD)"
+          EXPECTED="${{ needs.preflight.outputs.upstream_sha }}"
+          test "$ACTUAL" = "$EXPECTED"
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
@@ -180,8 +196,8 @@ jobs:
           if-no-files-found: error
 
   reduce:
-    name: Auditar e publicar vencedora
-    needs: optimize
+    name: Auditar grade completa e publicar vencedora
+    needs: [preflight, optimize]
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
@@ -189,13 +205,20 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Checkout B3 Strategy Lab
+      - name: Checkout exatamente o mesmo B3 Strategy Lab usado pelos shards
         uses: actions/checkout@v4
         with:
           repository: mycroft440/b3-strategy-lab
-          ref: main
+          ref: ${{ needs.preflight.outputs.upstream_sha }}
           path: upstream
           fetch-depth: 1
+      - name: Verificar pin upstream
+        run: |
+          set -euo pipefail
+          ACTUAL="$(git -C upstream rev-parse HEAD)"
+          EXPECTED="${{ needs.preflight.outputs.upstream_sha }}"
+          test "$ACTUAL" = "$EXPECTED"
+          echo "UPSTREAM_SHA=$ACTUAL" >> "$GITHUB_ENV"
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
@@ -208,11 +231,18 @@ jobs:
           pattern: b3-opt-shard-*
           path: shard-results
           merge-multiple: true
-      - name: Capturar commit exato do B3 Strategy Lab
-        run: echo "UPSTREAM_SHA=$(git -C upstream rev-parse HEAD)" >> "$GITHUB_ENV"
-      - name: Reduzir, auditar cardinalidade e recalcular curva diaria
+      - name: Provar grade cartesiana exata, passo 1, sem lacunas ou repeticoes
         run: |
           mkdir -p final-results
+          python optimizer/audit_exhaustive_grid.py \
+            --results-dir shard-results \
+            --output final-results/EXHAUSTIVE_GRID_AUDIT.json \
+            --gap-min "$GAP_MIN" --gap-max "$GAP_MAX" \
+            --signal-min "$SIGNAL_MIN" --signal-max "$SIGNAL_MAX" \
+            --momentum-min "$MOMENTUM_MIN" --momentum-max "$MOMENTUM_MAX" \
+            --vol-period "$VOL_PERIOD"
+      - name: Reduzir, auditar cardinalidade e recalcular curva diaria
+        run: |
           python optimizer/reduce_results.py \
             --data-root upstream \
             --results-dir shard-results \
@@ -228,7 +258,11 @@ jobs:
             --odd-lot-extra-bps "$ODD_LOT_EXTRA_BPS" \
             --upstream-sha "$UPSTREAM_SHA"
       - name: Mostrar resumo no GitHub Actions
-        run: cat final-results/OPTIMIZATION_SUMMARY.md >> "$GITHUB_STEP_SUMMARY"
+        run: |
+          cat final-results/OPTIMIZATION_SUMMARY.md >> "$GITHUB_STEP_SUMMARY"
+          echo '' >> "$GITHUB_STEP_SUMMARY"
+          echo '## Auditoria da grade exaustiva' >> "$GITHUB_STEP_SUMMARY"
+          cat final-results/EXHAUSTIVE_GRID_AUDIT.json >> "$GITHUB_STEP_SUMMARY"
       - name: Publicar resultados completos como artifact
         uses: actions/upload-artifact@v4
         with:
@@ -236,13 +270,14 @@ jobs:
           path: final-results/
           retention-days: 30
           if-no-files-found: error
-      - name: Versionar resumo e top 100 na main
+      - name: Versionar resumo, auditoria e top 100 na main
         run: |
           rm -rf reports/latest
           mkdir -p reports/latest
           cp final-results/OPTIMIZATION_SUMMARY.md reports/latest/
           cp final-results/BEST.json reports/latest/
           cp final-results/MANIFEST.json reports/latest/
+          cp final-results/EXHAUSTIVE_GRID_AUDIT.json reports/latest/
           cp final-results/top_100.csv reports/latest/
           cp final-results/BEST_EQUITY_DAILY.csv reports/latest/
           git config user.name "github-actions[bot]"
