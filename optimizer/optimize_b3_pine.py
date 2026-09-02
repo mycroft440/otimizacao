@@ -1,27 +1,29 @@
 #!/usr/bin/env python3
 """Otimizador exaustivo da estratégia Pine B3 Gap Momentum + Top1 semanal.
 
-O código usa somente os candles oficiais já versionados em b3-strategy-lab.
-A estratégia reproduz a semântica do Pine auditado:
+O código usa somente candles oficiais congelados pelo workflow.
+A estratégia reproduz a semântica do Pine V17 em modo 1x para a otimização dos
+períodos do indicador:
 - Gap Ratio por janela;
 - SMA do Gap Ratio e estado persistente pela direção da SMA;
 - Momentum positivo como score;
 - volatilidade amostral de 21 retornos apenas como gate > 0;
 - decisão no último pregão da semana e execução na primeira abertura seguinte;
 - Top1; empate exato preserva incumbente elegível;
+- se o mesmo Top1 continua, mantém exatamente a posição: sem venda, recompra ou
+  reinvestimento semanal de caixa residual;
+- troca de ativo atômica: valida venda e nova compra antes de alterar a carteira;
 - custos/slippage adversos por lado e penalidade fracionária ponderada;
-- lote mínimo de 1 ação; sem dividendos/JCP, IR ou alavancagem.
+- lote mínimo de 1 ação; sem dividendos/JCP, IR ou alavancagem nesta etapa de
+  otimização dos parâmetros.
 """
 from __future__ import annotations
 
 import argparse
-import csv
 import json
 import math
 from dataclasses import dataclass
-from datetime import date
 from pathlib import Path
-from typing import Iterable
 
 import numpy as np
 import pandas as pd
@@ -136,7 +138,12 @@ def load_market(data_root: Path, start: str, end: str) -> MarketData:
         df = df.drop_duplicates("date", keep="last").sort_values("date").reset_index(drop=True)
         df["open"] = pd.to_numeric(df["open"], errors="coerce")
         df["close"] = pd.to_numeric(df["close"], errors="coerce")
-        df = df[np.isfinite(df["open"]) & np.isfinite(df["close"]) & (df["open"] > 0) & (df["close"] > 0)].copy()
+        df = df[
+            np.isfinite(df["open"])
+            & np.isfinite(df["close"])
+            & (df["open"] > 0)
+            & (df["close"] > 0)
+        ].copy()
         frames[ticker] = df
         all_dates.update(df["date"].tolist())
 
@@ -202,7 +209,9 @@ def precompute_shard(
     P, W, N = len(pairs), len(market.execution_dates), len(market.tickers)
     M = len(momentum_values)
     gap_state = np.zeros((P, W, N), dtype=np.bool_)
-    momentum = np.full((M, W, N), np.nan, dtype=np.float32)
+    # Pine usa precisão de ponto flutuante equivalente a double. Não reduzir para
+    # float32 aqui: uma diferença minúscula pode trocar o Top1 semanal.
+    momentum = np.full((M, W, N), np.nan, dtype=np.float64)
     vol_valid = np.zeros((W, N), dtype=np.bool_)
 
     for ti, ticker in enumerate(market.tickers):
@@ -216,7 +225,7 @@ def precompute_shard(
         if np.any(decision_ok):
             vol_valid[decision_ok, ti] = vol[didx[decision_ok]]
 
-        # Momentum é calculado no contexto próprio de cada ativo, exatamente como request.security().
+        # Momentum é calculado no contexto próprio de cada ativo, como request.security().
         for mi, m in enumerate(momentum_values):
             valid_w = decision_ok & (didx >= m)
             if not np.any(valid_w):
@@ -225,7 +234,7 @@ def precompute_shard(
             prev = closes[ii - m]
             cur = closes[ii]
             score = np.where((prev > 0.0) & (cur > 0.0), cur / prev - 1.0, np.nan)
-            momentum[mi, valid_w, ti] = score.astype(np.float32)
+            momentum[mi, valid_w, ti] = score
 
         gaps = np.zeros(len(closes), dtype=np.float64)
         if len(closes) > 1:
@@ -256,14 +265,14 @@ def precompute_shard(
 
 def first_ranked_targets(gap_state: np.ndarray, mom: np.ndarray, vol_valid: np.ndarray) -> np.ndarray:
     """Top1 por semana e por par Gap/Signal, preservando ordem do universo em empate."""
-    P, W, N = gap_state.shape
+    P, W, _N = gap_state.shape
     base = np.isfinite(mom) & (mom > 0.0) & vol_valid
     scores = np.where(base, mom, -np.inf)
     order = np.argsort(-scores, axis=1, kind="stable")
     targets = np.full((P, W), -1, dtype=np.int16)
     unresolved = np.ones((P, W), dtype=np.bool_)
     widx = np.arange(W)
-    for rank in range(N):
+    for rank in range(order.shape[1]):
         asset = order[:, rank]
         base_ok = base[widx, asset]
         gap_ok = gap_state[:, widx, asset]
@@ -296,7 +305,6 @@ def affordable_qty(cash: np.ndarray, raw: np.ndarray, fee: float, base: float, e
     odd = np.floor(np.maximum(0.0, remainder) / (A + B)).astype(np.int64)
     odd = np.clip(odd, 0, 99)
     qq = lots * 100 + odd
-    # Proteção contra arredondamento de ponto flutuante.
     rr = qq % 100
     total = rraw * ((1.0 + base) * qq + extra * rr) * (1.0 + fee)
     too_much = total > cc + 1e-9
@@ -317,6 +325,14 @@ def simulate_pairs(
     slippage_bps: float,
     odd_lot_extra_bps: float,
 ) -> dict[str, np.ndarray]:
+    """Gerencia cada combinação como uma carteira Top1 independente.
+
+    Política idêntica ao Pine V17 em 1x:
+    - mesmo alvo: nenhuma ordem e nenhuma alteração de quantidade;
+    - alvo diferente: preflight completo, depois venda e compra atômicas;
+    - alvo CASH: vende a posição se houver abertura válida;
+    - falha de execução: mantém a carteira exatamente como estava.
+    """
     P, W = targets.shape
     fee = fee_bps / 10000.0
     base = slippage_bps / 10000.0
@@ -328,13 +344,11 @@ def simulate_pairs(
     skipped = np.zeros(P, dtype=np.int32)
     fees_paid = np.zeros(P, dtype=np.float64)
     slip_paid = np.zeros(P, dtype=np.float64)
-    pidx = np.arange(P)
 
     for w in range(W):
         target = targets[:, w].copy()
 
-        # Empate exato: se o incumbente ainda é elegível e tem o mesmo score do líder,
-        # preserva a posição atual em vez de rotacionar pela ordem fixa do universo.
+        # Empate exato: incumbente elegível com o mesmo score permanece.
         hmask = (holding >= 0) & (target >= 0) & (holding != target)
         if np.any(hmask):
             rows = np.flatnonzero(hmask)
@@ -342,11 +356,17 @@ def simulate_pairs(
             t = target[rows].astype(np.int64)
             inc_m = mom[w, h]
             top_m = mom[w, t]
-            inc_ok = gap_state[rows, w, h] & vol_valid[w, h] & np.isfinite(inc_m) & (inc_m > 0.0)
+            inc_ok = (
+                gap_state[rows, w, h]
+                & vol_valid[w, h]
+                & np.isfinite(inc_m)
+                & (inc_m > 0.0)
+            )
             tie = inc_ok & np.isfinite(top_m) & (inc_m == top_m)
             if np.any(tie):
                 target[rows[tie]] = holding[rows[tie]]
 
+        # Somente carteiras cujo alvo mudou podem gerar ordens.
         changed = target != holding
         rows = np.flatnonzero(changed)
         if len(rows):
@@ -387,6 +407,7 @@ def simulate_pairs(
             if len(good_rows):
                 oldg = holding[good_rows].astype(np.int64)
                 newg = target[good_rows].astype(np.int64)
+
                 sell = oldg >= 0
                 if np.any(sell):
                     gr = good_rows[sell]
@@ -413,46 +434,30 @@ def simulate_pairs(
                     gross = raw * ((1.0 + base) * q + extra * odd)
                     ff = gross * fee
                     slip = raw * (base * q + extra * odd)
-                    cash[gr] -= gross + ff
-                    cash[gr] = np.maximum(cash[gr], 0.0)
+                    new_cash = cash[gr] - gross - ff
+                    if np.any(new_cash < -1e-7):
+                        raise RuntimeError("invariante violada: compra gerou caixa negativo")
+                    cash[gr] = np.maximum(new_cash, 0.0)
                     shares[gr] = q
                     holding[gr] = new_asset.astype(np.int16)
                     fees_paid[gr] += ff
                     slip_paid[gr] += slip
                     trades[gr] += (q > 0).astype(np.int32)
 
-        # Se o mesmo Top1 continua, o Pine pode investir caixa residual sem vender
-        # a posição. Ausência de abertura não invalida a manutenção.
-        same = (target == holding) & (holding >= 0)
-        rows = np.flatnonzero(same)
-        if len(rows):
-            raw = market.exec_open[w, holding[rows].astype(np.int64)]
-            ok = np.isfinite(raw) & (raw > 0.0)
-            if np.any(ok):
-                gr = rows[ok]
-                raw_ok = raw[ok]
-                q = affordable_qty(cash[gr], raw_ok, fee, base, extra)
-                buy = q > 0
-                if np.any(buy):
-                    br = gr[buy]
-                    raw_b = raw_ok[buy]
-                    qb = q[buy]
-                    odd = qb % 100
-                    gross = raw_b * ((1.0 + base) * qb + extra * odd)
-                    ff = gross * fee
-                    slip = raw_b * (base * qb + extra * odd)
-                    cash[br] -= gross + ff
-                    cash[br] = np.maximum(cash[br], 0.0)
-                    shares[br] += qb
-                    fees_paid[br] += ff
-                    slip_paid[br] += slip
-                    trades[br] += 1
+        if np.any(cash < -1e-7):
+            raise RuntimeError("invariante violada: caixa negativo")
+        if np.any(shares < 0):
+            raise RuntimeError("invariante violada: posição vendida/quantidade negativa")
+        if np.any((holding < 0) != (shares == 0)):
+            raise RuntimeError("invariante violada: holding e quantidade divergentes")
 
     equity = cash.copy()
     invested = holding >= 0
     if np.any(invested):
         rows = np.flatnonzero(invested)
         px = market.final_close[holding[rows].astype(np.int64)]
+        if np.any(~np.isfinite(px)) or np.any(px <= 0.0):
+            raise RuntimeError("preço final inválido para posição aberta")
         equity[rows] += shares[rows] * px
 
     return {
@@ -484,7 +489,16 @@ def main() -> None:
     args.output.parent.mkdir(parents=True, exist_ok=True)
 
     if not gap_values:
-        pd.DataFrame(columns=["gap_period", "signal_period", "momentum_period", "vol_period", "final_equity", "total_return"]).to_csv(args.output, index=False)
+        pd.DataFrame(
+            columns=[
+                "gap_period",
+                "signal_period",
+                "momentum_period",
+                "vol_period",
+                "final_equity",
+                "total_return",
+            ]
+        ).to_csv(args.output, index=False)
         return
 
     market = load_market(args.data_root, args.start, args.end)
@@ -494,7 +508,7 @@ def main() -> None:
 
     rows: list[dict[str, object]] = []
     for mi, m in enumerate(momentum_values):
-        mom = momentum[mi].astype(np.float64)
+        mom = momentum[mi]
         targets = first_ranked_targets(gap_state, mom, vol_valid)
         sim = simulate_pairs(
             targets,
@@ -552,8 +566,12 @@ def main() -> None:
         "fee_bps": args.fee_bps,
         "slippage_bps": args.slippage_bps,
         "odd_lot_extra_bps": args.odd_lot_extra_bps,
+        "portfolio_policy": "pine_v17_hold_same_target_no_residual_reinvestment",
+        "momentum_dtype": "float64",
     }
-    args.output.with_suffix(".json").write_text(json.dumps(meta, indent=2, ensure_ascii=False), encoding="utf-8")
+    args.output.with_suffix(".json").write_text(
+        json.dumps(meta, indent=2, ensure_ascii=False), encoding="utf-8"
+    )
     if len(result):
         best = result.iloc[0]
         print(
