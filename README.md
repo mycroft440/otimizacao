@@ -53,7 +53,7 @@ Os valores podem ser alterados no disparo manual do workflow.
 
 O workflow publica:
 
-- `all_results.csv`: todas as combinações testadas;
+- `all_results.csv.gz`: todas as combinações testadas;
 - `top_100.csv`: as 100 mais lucrativas;
 - `BEST.json`: melhor configuração e métricas;
 - `BEST_EQUITY_DAILY.csv`: curva diária da vencedora;
