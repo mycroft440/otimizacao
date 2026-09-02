@@ -1,0 +1,22 @@
+{
+  "gap_period": 75,
+  "signal_period": 9,
+  "momentum_period": 123,
+  "vol_period": 21,
+  "start": "2018-01-02",
+  "end": "2026-08-19",
+  "initial_cash": 1000.0,
+  "final_equity": 30730.008237413236,
+  "profit": 29730.008237413236,
+  "total_return": 29.730008237413237,
+  "cagr": 0.48740128813484307,
+  "average_annual_return": 0.7233571121130264,
+  "max_drawdown": -0.5660992050722202,
+  "annual_volatility": 0.4110222017866377,
+  "sharpe": 1.18592895432994,
+  "trades": 518,
+  "skipped_executions": 0,
+  "fees_paid": 1243.0616633401485,
+  "slippage_impact": 4460.32804932557,
+  "final_holding": "TUPY3"
+}
