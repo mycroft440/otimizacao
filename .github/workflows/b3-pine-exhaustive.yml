@@ -8,7 +8,7 @@ on:
         required: true
         default: '2018-01-02'
       end:
-        description: Data final (vazio = ultimo candle versionado)
+        description: Data final (vazio = ultima sessao oficial anterior a hoje)
         required: false
         default: ''
       gap_min:
@@ -40,9 +40,9 @@ on:
         required: true
         default: '1000'
       fee_bps:
-        description: Custo operacional em bps por lado
+        description: Custo B3 conservador em bps por lado
         required: true
-        default: '3'
+        default: '3.25'
       slippage_bps:
         description: Slippage base em bps por lado
         required: true
@@ -75,29 +75,30 @@ env:
   MOMENTUM_MAX: ${{ inputs.momentum_max || '252' }}
   VOL_PERIOD: '21'
   INITIAL_CASH: ${{ inputs.initial_cash || '1000' }}
-  FEE_BPS: ${{ inputs.fee_bps || '3' }}
+  FEE_BPS: ${{ inputs.fee_bps || '3.25' }}
   SLIPPAGE_BPS: ${{ inputs.slippage_bps || '10' }}
   ODD_LOT_EXTRA_BPS: ${{ inputs.odd_lot_extra_bps || '5' }}
   SHARDS: '16'
 
 jobs:
   preflight:
-    name: Preflight Pine-equivalent
+    name: Congelar dados oficiais e validar Pine
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 60
     outputs:
       upstream_sha: ${{ steps.pin_upstream.outputs.sha }}
+      snapshot_end: ${{ steps.snapshot_end.outputs.value }}
     steps:
       - name: Checkout otimizacao
         uses: actions/checkout@v4
-      - name: Checkout B3 Strategy Lab uma unica vez para fixar snapshot
+      - name: Checkout B3 Strategy Lab uma unica vez
         uses: actions/checkout@v4
         with:
           repository: mycroft440/b3-strategy-lab
           ref: main
           path: upstream
           fetch-depth: 1
-      - name: Fixar commit upstream para toda a matriz
+      - name: Fixar commit upstream
         id: pin_upstream
         run: |
           set -euo pipefail
@@ -113,11 +114,125 @@ jobs:
         run: python -m pip install --upgrade pip numpy pandas
       - name: Validar sintaxe
         run: python -m py_compile optimizer/optimize_b3_pine.py optimizer/reduce_results.py optimizer/audit_exhaustive_grid.py
-      - name: Smoke test da configuracao Pine 40/20/63
+      - name: Resolver corte oficial
+        id: snapshot_end
+        run: |
+          set -euo pipefail
+          if [ -n "$END" ]; then
+            VALUE="$END"
+          else
+            VALUE="$(date -u -d 'yesterday' +%F)"
+          fi
+          python - "$VALUE" <<'PY'
+          import sys
+          from datetime import date
+          value = date.fromisoformat(sys.argv[1])
+          if value >= date.today():
+              raise SystemExit('END precisa ser anterior ao dia corrente')
+          PY
+          echo "value=$VALUE" >> "$GITHUB_OUTPUT"
+          echo "SNAPSHOT_END=$VALUE" >> "$GITHUB_ENV"
+      - name: Sincronizar uma unica vez o universo exato do Pine com PRIO3
+        run: |
+          set -euo pipefail
+          SNAPSHOT_ROOT="$GITHUB_WORKSPACE/pine_snapshot"
+          mkdir -p "$SNAPSHOT_ROOT/data/universes" "$SNAPSHOT_ROOT/data/candles" "$SNAPSHOT_ROOT/data/manifests" "$SNAPSHOT_ROOT/data/corporate_actions"
+          cp optimizer/b3_strategy_live_universe.json "$SNAPSHOT_ROOT/data/universes/fixed_40_2018.json"
+          END_YEAR="${SNAPSHOT_END:0:4}"
+          python upstream/scripts/sync_official_universe.py \
+            --universe "$SNAPSHOT_ROOT/data/universes/fixed_40_2018.json" \
+            --selection-report "$GITHUB_WORKSPACE/optimizer/b3_strategy_live_selection.csv" \
+            --archives-dir "$GITHUB_WORKSPACE/upstream/.cache/cotahist" \
+            --supplements-dir "$GITHUB_WORKSPACE/upstream/.cache/b3_supplements" \
+            --data-dir "$SNAPSHOT_ROOT/data/candles" \
+            --actions-dir "$SNAPSHOT_ROOT/data/corporate_actions" \
+            --manifests-dir "$SNAPSHOT_ROOT/data/manifests" \
+            --split-evidence "$SNAPSHOT_ROOT/data/corporate_actions/split_evidence.json" \
+            --supplemental-splits "$GITHUB_WORKSPACE/upstream/data/corporate_actions/supplemental_split_events.json" \
+            --quality-reviews "$GITHUB_WORKSPACE/upstream/data/quality_reviews.json" \
+            --years "2017:${END_YEAR}" \
+            --end "$SNAPSHOT_END" \
+            --download \
+            --refresh-current \
+            --refresh-actions
+      - name: Auditar snapshot e gravar hashes imutaveis
+        env:
+          UPSTREAM_SHA: ${{ steps.pin_upstream.outputs.sha }}
+        run: |
+          python - <<'PY'
+          import hashlib, json, os
+          from datetime import date
+          from pathlib import Path
+          import pandas as pd
+
+          root = Path('pine_snapshot')
+          universe_path = root / 'data/universes/fixed_40_2018.json'
+          universe = json.loads(universe_path.read_text(encoding='utf-8'))
+          tickers = [str(x).upper() for x in universe['tickers']]
+          if len(tickers) != 40 or len(set(tickers)) != 40:
+              raise SystemExit(f'universo Pine precisa ter 40 tickers unicos, recebeu {len(tickers)}')
+          if 'PRIO3' not in tickers or 'CVCB3' in tickers:
+              raise SystemExit('snapshot nao corresponde ao Pine atual: PRIO3/CVCB3 divergente')
+
+          hashes = {}
+          end_dates = []
+          starts = []
+          session_sets = []
+          for ticker in tickers:
+              path = root / 'data/candles' / f'{ticker.lower()}_1d.csv'
+              if not path.exists():
+                  raise SystemExit(f'candle ausente: {path}')
+              raw = path.read_bytes()
+              hashes[str(path.relative_to(root))] = hashlib.sha256(raw).hexdigest()
+              df = pd.read_csv(path, usecols=['date'])
+              dates = pd.to_datetime(df['date'].astype(str).str[:10], errors='raise')
+              if dates.duplicated().any() or not dates.is_monotonic_increasing:
+                  raise SystemExit(f'{ticker}: datas duplicadas ou fora de ordem')
+              if len(dates) < 300:
+                  raise SystemExit(f'{ticker}: historico insuficiente ({len(dates)} linhas)')
+              starts.append(dates.iloc[0].date().isoformat())
+              end_dates.append(dates.iloc[-1].date().isoformat())
+              session_sets.append(set(dates[dates >= pd.Timestamp('2018-01-02')].dt.date))
+
+          common_end = min(end_dates)
+          newest_end = max(end_dates)
+          if common_end != newest_end:
+              raise SystemExit(f'ativos terminam em datas diferentes: min={common_end} max={newest_end}')
+          expected_sessions = session_sets[0]
+          for ticker, sessions in zip(tickers[1:], session_sets[1:]):
+              if sessions != expected_sessions:
+                  missing = sorted(expected_sessions - sessions)[:5]
+                  extra = sorted(sessions - expected_sessions)[:5]
+                  raise SystemExit(f'{ticker}: calendario diverge; missing={missing} extra={extra}')
+
+          requested_end = date.fromisoformat(os.environ['SNAPSHOT_END'])
+          actual_end = date.fromisoformat(common_end)
+          if (requested_end - actual_end).days > 4:
+              raise SystemExit(f'snapshot desatualizado: requested={requested_end} actual={actual_end}')
+
+          universe_hash = hashlib.sha256(universe_path.read_bytes()).hexdigest()
+          meta = {
+              'status': 'PASS',
+              'upstream_sha': os.environ['UPSTREAM_SHA'],
+              'requested_end': os.environ['SNAPSHOT_END'],
+              'actual_common_end': common_end,
+              'universe_count': 40,
+              'universe_sha256': universe_hash,
+              'universe': tickers,
+              'candle_sha256': hashes,
+              'all_tickers_share_sessions_since_2018_01_02': True,
+              'pine_slot11': 'PRIO3',
+              'survivorship_safe': False,
+              'purpose': 'exact Pine Live retrospective optimization snapshot'
+          }
+          (root / 'SNAPSHOT_META.json').write_text(json.dumps(meta, indent=2, ensure_ascii=False) + '\n', encoding='utf-8')
+          print(json.dumps(meta, ensure_ascii=False))
+          PY
+      - name: Smoke test Pine 40/20/63 sobre o snapshot congelado
         run: |
           mkdir -p preflight
           python optimizer/optimize_b3_pine.py \
-            --data-root upstream \
+            --data-root pine_snapshot \
             --output preflight/shard_0.csv \
             --start "$START" --end "$END" \
             --gap-min 40 --gap-max 40 \
@@ -132,13 +247,19 @@ jobs:
           python - <<'PY'
           import pandas as pd
           x = pd.read_csv('preflight/shard_0.csv')
-          assert len(x) == 1, len(x)
-          assert int(x.iloc[0].gap_period) == 40
-          assert int(x.iloc[0].signal_period) == 20
-          assert int(x.iloc[0].momentum_period) == 63
-          assert x.iloc[0].final_equity > 0
+          assert len(x) == 1
+          assert tuple(map(int, x.loc[0, ['gap_period','signal_period','momentum_period']])) == (40,20,63)
+          assert float(x.iloc[0].final_equity) > 0
           print(x.to_string(index=False))
           PY
+      - name: Publicar snapshot unico para todos os shards
+        uses: actions/upload-artifact@v4
+        with:
+          name: b3-pine-live-market-snapshot-${{ github.run_id }}
+          path: pine_snapshot/
+          retention-days: 7
+          if-no-files-found: error
+          compression-level: 6
 
   optimize:
     name: Shard ${{ matrix.shard }} / 15
@@ -152,30 +273,33 @@ jobs:
     steps:
       - name: Checkout otimizacao
         uses: actions/checkout@v4
-      - name: Checkout exatamente o mesmo B3 Strategy Lab do preflight
-        uses: actions/checkout@v4
-        with:
-          repository: mycroft440/b3-strategy-lab
-          ref: ${{ needs.preflight.outputs.upstream_sha }}
-          path: upstream
-          fetch-depth: 1
-      - name: Verificar pin upstream
-        run: |
-          set -euo pipefail
-          ACTUAL="$(git -C upstream rev-parse HEAD)"
-          EXPECTED="${{ needs.preflight.outputs.upstream_sha }}"
-          test "$ACTUAL" = "$EXPECTED"
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
           cache: pip
       - name: Instalar dependencias
         run: python -m pip install --upgrade pip numpy pandas
+      - name: Baixar exatamente o mesmo snapshot de mercado
+        uses: actions/download-artifact@v4
+        with:
+          name: b3-pine-live-market-snapshot-${{ github.run_id }}
+          path: pine_snapshot
+      - name: Conferir identidade do snapshot
+        run: |
+          test -f pine_snapshot/SNAPSHOT_META.json
+          python - <<'PY'
+          import json
+          m=json.load(open('pine_snapshot/SNAPSHOT_META.json', encoding='utf-8'))
+          assert m['status']=='PASS'
+          assert m['pine_slot11']=='PRIO3'
+          assert len(m['universe'])==40
+          print(m['upstream_sha'], m['actual_common_end'])
+          PY
       - name: Executar shard exaustivo
         run: |
           mkdir -p shard-results
           python optimizer/optimize_b3_pine.py \
-            --data-root upstream \
+            --data-root pine_snapshot \
             --output "shard-results/shard_${{ matrix.shard }}.csv" \
             --start "$START" --end "$END" \
             --gap-min "$GAP_MIN" --gap-max "$GAP_MAX" \
@@ -205,26 +329,17 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Checkout exatamente o mesmo B3 Strategy Lab usado pelos shards
-        uses: actions/checkout@v4
-        with:
-          repository: mycroft440/b3-strategy-lab
-          ref: ${{ needs.preflight.outputs.upstream_sha }}
-          path: upstream
-          fetch-depth: 1
-      - name: Verificar pin upstream
-        run: |
-          set -euo pipefail
-          ACTUAL="$(git -C upstream rev-parse HEAD)"
-          EXPECTED="${{ needs.preflight.outputs.upstream_sha }}"
-          test "$ACTUAL" = "$EXPECTED"
-          echo "UPSTREAM_SHA=$ACTUAL" >> "$GITHUB_ENV"
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
           cache: pip
       - name: Instalar dependencias
         run: python -m pip install --upgrade pip numpy pandas
+      - name: Baixar snapshot congelado
+        uses: actions/download-artifact@v4
+        with:
+          name: b3-pine-live-market-snapshot-${{ github.run_id }}
+          path: pine_snapshot
       - name: Baixar todos os shards
         uses: actions/download-artifact@v4
         with:
@@ -241,10 +356,12 @@ jobs:
             --signal-min "$SIGNAL_MIN" --signal-max "$SIGNAL_MAX" \
             --momentum-min "$MOMENTUM_MIN" --momentum-max "$MOMENTUM_MAX" \
             --vol-period "$VOL_PERIOD"
-      - name: Reduzir, auditar cardinalidade e recalcular curva diaria
+      - name: Reduzir e recalcular curva diaria da vencedora
+        env:
+          UPSTREAM_SHA: ${{ needs.preflight.outputs.upstream_sha }}
         run: |
           python optimizer/reduce_results.py \
-            --data-root upstream \
+            --data-root pine_snapshot \
             --results-dir shard-results \
             --output-dir final-results \
             --start "$START" --end "$END" \
@@ -257,6 +374,7 @@ jobs:
             --slippage-bps "$SLIPPAGE_BPS" \
             --odd-lot-extra-bps "$ODD_LOT_EXTRA_BPS" \
             --upstream-sha "$UPSTREAM_SHA"
+          cp pine_snapshot/SNAPSHOT_META.json final-results/MARKET_SNAPSHOT_META.json
       - name: Mostrar resumo no GitHub Actions
         run: |
           cat final-results/OPTIMIZATION_SUMMARY.md >> "$GITHUB_STEP_SUMMARY"
@@ -270,7 +388,7 @@ jobs:
           path: final-results/
           retention-days: 30
           if-no-files-found: error
-      - name: Versionar resumo, auditoria e top 100 na main
+      - name: Versionar resumo, auditorias e top 100 na main
         run: |
           rm -rf reports/latest
           mkdir -p reports/latest
@@ -278,6 +396,7 @@ jobs:
           cp final-results/BEST.json reports/latest/
           cp final-results/MANIFEST.json reports/latest/
           cp final-results/EXHAUSTIVE_GRID_AUDIT.json reports/latest/
+          cp final-results/MARKET_SNAPSHOT_META.json reports/latest/
           cp final-results/top_100.csv reports/latest/
           cp final-results/BEST_EQUITY_DAILY.csv reports/latest/
           git config user.name "github-actions[bot]"
