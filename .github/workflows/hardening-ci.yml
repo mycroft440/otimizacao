@@ -6,6 +6,7 @@ on:
       - main
       - hardening/full-audit-fixes
       - perf/exact-backtest-speedups
+      - performance/exact-v2
     paths:
       - 'optimizer/**'
       - 'tests/**'
