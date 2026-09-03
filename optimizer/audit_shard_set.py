@@ -86,6 +86,8 @@ def audit_shard_set(
             failures.append(f"falha ao ler shard {shard_id}: {exc}")
             continue
 
+        if int(meta.get("schema_version", 0)) != 2:
+            failures.append(f"shard {shard_id}: schema_version precisa ser 2")
         if int(meta.get("shard", -1)) != shard_id:
             failures.append(f"shard {shard_id}: metadata shard={meta.get('shard')}")
         if int(meta.get("shards", -1)) != expected_shards:
@@ -96,6 +98,10 @@ def audit_shard_set(
             pd.to_numeric(frame["shard"], errors="coerce") == shard_id
         ).all():
             failures.append(f"shard {shard_id}: coluna shard do CSV diverge")
+
+        actual_csv_hash = sha256(csv_path)
+        if str(meta.get("csv_sha256", "")) != actual_csv_hash:
+            failures.append(f"shard {shard_id}: csv_sha256 nao confere")
 
         if "gap_period" in frame.columns:
             actual_gaps = sorted(
@@ -133,11 +139,17 @@ def audit_shard_set(
             "odd_lot_extra_bps": meta.get("odd_lot_extra_bps"),
             "portfolio_policy": meta.get("portfolio_policy"),
             "momentum_dtype": meta.get("momentum_dtype"),
+            "github_run_id": meta.get("github_run_id"),
+            "optimizer_sha": meta.get("optimizer_sha"),
+            "github_repository": meta.get("github_repository"),
+            "snapshot_upstream_sha": meta.get("snapshot_upstream_sha"),
+            "snapshot_universe_sha256": meta.get("snapshot_universe_sha256"),
+            "snapshot_requested_end": meta.get("snapshot_requested_end"),
         }
         if canonical_contract is None:
             canonical_contract = contract
         elif contract != canonical_contract:
-            failures.append(f"shard {shard_id}: contrato metadata diverge dos demais shards")
+            failures.append(f"shard {shard_id}: contrato/proveniencia diverge dos demais shards")
 
         file_reports.append(
             {
@@ -145,7 +157,7 @@ def audit_shard_set(
                 "csv": str(csv_path),
                 "json": str(meta_path),
                 "rows": int(len(frame)),
-                "csv_sha256": sha256(csv_path),
+                "csv_sha256": actual_csv_hash,
                 "json_sha256": sha256(meta_path),
             }
         )
@@ -159,7 +171,7 @@ def audit_shard_set(
 
     return {
         "status": "PASS" if not failures else "FAIL",
-        "schema_version": 1,
+        "schema_version": 2,
         "expected_shards": expected_shards,
         "observed_shard_ids": sorted(seen_ids),
         "canonical_contract": canonical_contract,
