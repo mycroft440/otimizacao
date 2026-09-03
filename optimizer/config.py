@@ -12,7 +12,7 @@ DEFAULT_SIGNAL_MAX = 60
 DEFAULT_MOMENTUM_MIN = 5
 DEFAULT_MOMENTUM_MAX = 252
 DEFAULT_VOL_PERIOD = 21
-DEFAULT_VOL_MIN = 1
+DEFAULT_VOL_MIN = 2
 DEFAULT_VOL_MAX = 60
 DEFAULT_INITIAL_CASH = 1000.0
 DEFAULT_FEE_BPS = 3.25
@@ -58,6 +58,10 @@ def validate_periods(gap: int, signal: int, momentum: int, vol: int) -> None:
             raise ValueError(f"{name} precisa ser inteiro")
         if value <= 0 or value > MAX_PERIOD:
             raise ValueError(f"{name} fora do intervalo permitido: {value}")
+    if vol < 2:
+        raise ValueError(
+            "vol precisa ser >= 2 para reproduzir a variancia amostral do Pine"
+        )
 
 
 def validate_run_config(
