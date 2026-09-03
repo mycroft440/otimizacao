@@ -20,13 +20,17 @@ períodos do indicador:
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import math
+import os
 from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
+
+import config
 
 
 @dataclass
@@ -47,22 +51,30 @@ def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser()
     p.add_argument("--data-root", required=True, type=Path)
     p.add_argument("--output", required=True, type=Path)
-    p.add_argument("--start", default="2018-01-02")
-    p.add_argument("--end", default="")
-    p.add_argument("--gap-min", type=int, default=5)
-    p.add_argument("--gap-max", type=int, default=80)
-    p.add_argument("--signal-min", type=int, default=2)
-    p.add_argument("--signal-max", type=int, default=60)
-    p.add_argument("--momentum-min", type=int, default=5)
-    p.add_argument("--momentum-max", type=int, default=252)
-    p.add_argument("--vol-period", type=int, default=21)
-    p.add_argument("--initial-cash", type=float, default=1000.0)
-    p.add_argument("--fee-bps", type=float, default=3.0)
-    p.add_argument("--slippage-bps", type=float, default=10.0)
-    p.add_argument("--odd-lot-extra-bps", type=float, default=5.0)
+    p.add_argument("--start", default=config.DEFAULT_START)
+    p.add_argument("--end", default=config.DEFAULT_END)
+    p.add_argument("--gap-min", type=int, default=config.DEFAULT_GAP_MIN)
+    p.add_argument("--gap-max", type=int, default=config.DEFAULT_GAP_MAX)
+    p.add_argument("--signal-min", type=int, default=config.DEFAULT_SIGNAL_MIN)
+    p.add_argument("--signal-max", type=int, default=config.DEFAULT_SIGNAL_MAX)
+    p.add_argument("--momentum-min", type=int, default=config.DEFAULT_MOMENTUM_MIN)
+    p.add_argument("--momentum-max", type=int, default=config.DEFAULT_MOMENTUM_MAX)
+    p.add_argument("--vol-period", type=int, default=config.DEFAULT_VOL_PERIOD)
+    p.add_argument("--initial-cash", type=float, default=config.DEFAULT_INITIAL_CASH)
+    p.add_argument("--fee-bps", type=float, default=config.DEFAULT_FEE_BPS)
+    p.add_argument("--slippage-bps", type=float, default=config.DEFAULT_SLIPPAGE_BPS)
+    p.add_argument("--odd-lot-extra-bps", type=float, default=config.DEFAULT_ODD_LOT_EXTRA_BPS)
     p.add_argument("--shard-id", type=int, default=0)
     p.add_argument("--shards", type=int, default=1)
     return p.parse_args()
+
+
+def sha256_file(path: Path) -> str:
+    h = hashlib.sha256()
+    with path.open("rb") as handle:
+        for block in iter(lambda: handle.read(1024 * 1024), b""):
+            h.update(block)
+    return h.hexdigest()
 
 
 def rolling_sum(values: np.ndarray, window: int) -> np.ndarray:
@@ -154,7 +166,6 @@ def load_market(data_root: Path, start: str, end: str) -> MarketData:
     if len(master) < 2:
         raise RuntimeError("Calendário mestre insuficiente.")
 
-    # Primeira sessão observada de cada semana civil B3.
     iso = master.isocalendar()
     week_key = (iso["year"].astype(str) + "-" + iso["week"].astype(str)).to_numpy()
     first_of_week = np.ones(len(master), dtype=bool)
@@ -209,8 +220,6 @@ def precompute_shard(
     P, W, N = len(pairs), len(market.execution_dates), len(market.tickers)
     M = len(momentum_values)
     gap_state = np.zeros((P, W, N), dtype=np.bool_)
-    # Pine usa precisão de ponto flutuante equivalente a double. Não reduzir para
-    # float32 aqui: uma diferença minúscula pode trocar o Top1 semanal.
     momentum = np.full((M, W, N), np.nan, dtype=np.float64)
     vol_valid = np.zeros((W, N), dtype=np.bool_)
 
@@ -225,7 +234,6 @@ def precompute_shard(
         if np.any(decision_ok):
             vol_valid[decision_ok, ti] = vol[didx[decision_ok]]
 
-        # Momentum é calculado no contexto próprio de cada ativo, como request.security().
         for mi, m in enumerate(momentum_values):
             valid_w = decision_ok & (didx >= m)
             if not np.any(valid_w):
@@ -347,8 +355,6 @@ def simulate_pairs(
 
     for w in range(W):
         target = targets[:, w].copy()
-
-        # Empate exato: incumbente elegível com o mesmo score permanece.
         hmask = (holding >= 0) & (target >= 0) & (holding != target)
         if np.any(hmask):
             rows = np.flatnonzero(hmask)
@@ -366,7 +372,6 @@ def simulate_pairs(
             if np.any(tie):
                 target[rows[tie]] = holding[rows[tie]]
 
-        # Somente carteiras cujo alvo mudou podem gerar ordens.
         changed = target != holding
         rows = np.flatnonzero(changed)
         if len(rows):
@@ -475,12 +480,26 @@ def simulate_pairs(
 
 def main() -> None:
     args = parse_args()
-    if args.shards <= 0 or not 0 <= args.shard_id < args.shards:
-        raise SystemExit("shard inválido")
-    if args.gap_min <= 0 or args.signal_min <= 0 or args.momentum_min <= 0 or args.vol_period <= 1:
-        raise SystemExit("Períodos precisam ser positivos e VOL_PERIOD > 1.")
-    if args.gap_max < args.gap_min or args.signal_max < args.signal_min or args.momentum_max < args.momentum_min:
-        raise SystemExit("Faixa inválida.")
+    try:
+        config.validate_run_config(
+            start=args.start,
+            end=args.end,
+            gap_min=args.gap_min,
+            gap_max=args.gap_max,
+            signal_min=args.signal_min,
+            signal_max=args.signal_max,
+            momentum_min=args.momentum_min,
+            momentum_max=args.momentum_max,
+            vol_period=args.vol_period,
+            initial_cash=args.initial_cash,
+            fee_bps=args.fee_bps,
+            slippage_bps=args.slippage_bps,
+            odd_lot_extra_bps=args.odd_lot_extra_bps,
+            shard_id=args.shard_id,
+            shards=args.shards,
+        )
+    except ValueError as exc:
+        raise SystemExit(str(exc)) from exc
 
     all_gaps = list(range(args.gap_min, args.gap_max + 1))
     gap_values = all_gaps[args.shard_id :: args.shards]
@@ -550,7 +569,14 @@ def main() -> None:
     )
     result.to_csv(args.output, index=False, float_format="%.12f")
 
+    snapshot_meta_path = args.data_root / "SNAPSHOT_META.json"
+    snapshot_meta = (
+        json.loads(snapshot_meta_path.read_text(encoding="utf-8"))
+        if snapshot_meta_path.exists()
+        else {}
+    )
     meta = {
+        "schema_version": 2,
         "shard": args.shard_id,
         "shards": args.shards,
         "gap_values": gap_values,
@@ -568,9 +594,16 @@ def main() -> None:
         "odd_lot_extra_bps": args.odd_lot_extra_bps,
         "portfolio_policy": "pine_v17_hold_same_target_no_residual_reinvestment",
         "momentum_dtype": "float64",
+        "csv_sha256": sha256_file(args.output),
+        "github_run_id": os.environ.get("GITHUB_RUN_ID", ""),
+        "optimizer_sha": os.environ.get("GITHUB_SHA", ""),
+        "github_repository": os.environ.get("GITHUB_REPOSITORY", ""),
+        "snapshot_upstream_sha": snapshot_meta.get("upstream_sha", ""),
+        "snapshot_universe_sha256": snapshot_meta.get("universe_sha256", ""),
+        "snapshot_requested_end": snapshot_meta.get("requested_end", ""),
     }
     args.output.with_suffix(".json").write_text(
-        json.dumps(meta, indent=2, ensure_ascii=False), encoding="utf-8"
+        json.dumps(meta, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
     )
     if len(result):
         best = result.iloc[0]
