@@ -31,6 +31,7 @@ def main():
     args = parse_args()
     manifest = json.loads(args.manifest.read_text(encoding="utf-8"))
     source_paths = [
+        "optimizer/requirements.txt",
         "optimizer/config.py",
         "optimizer/metrics.py",
         "optimizer/optimize_b3_pine.py",
@@ -43,6 +44,7 @@ def main():
         "optimizer/audit_snapshot.py",
         "optimizer/audit_stale_prices.py",
         "optimizer/audit_warmup.py",
+        "optimizer/audit_pine_golden.py",
         "optimizer/analyze_robustness.py",
         "optimizer/build_annual_report.py",
         "optimizer/harden_best_report.py",
@@ -50,8 +52,12 @@ def main():
         "optimizer/walk_forward_validate.py",
         "optimizer/walk_forward_windows.json",
         "tests/test_hardening.py",
+        "tests/test_reference_equivalence.py",
+        "tests/test_oos_guard.py",
+        "README.md",
         ".github/workflows/b3-pine-exhaustive.yml",
         ".github/workflows/b3-pine-walk-forward.yml",
+        ".github/workflows/hardening-ci.yml",
     ]
     source_hashes = {}
     for relative in source_paths:
