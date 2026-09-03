@@ -2,6 +2,13 @@ name: Hardening Real B3 Smoke
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - perf/exact-backtest-speedups
+    paths:
+      - 'optimizer/**'
+      - 'tests/**'
+      - '.github/workflows/hardening-real-b3-smoke.yml'
 
 permissions:
   contents: read
@@ -30,7 +37,7 @@ jobs:
         run: |
           python -m pip install --disable-pip-version-check -r optimizer/requirements.txt
           python -m pip check
-      - name: Download real 2025 COTAHIST and compare independent engines
+      - name: Download real 2025 COTAHIST and compare all exact engines
         run: |
           python - <<'PY'
           import json
@@ -46,7 +53,10 @@ jobs:
 
           sys.path.insert(0, str(Path('optimizer').resolve()))
           import build_b3_session_calendar as calendar_builder
+          import fast_batch
+          import fast_shared
           import optimize_b3_pine as opt
+          import optimize_b3_pine_fast as accelerated
           import reference_engine as ref
 
           root = Path('real-smoke')
@@ -90,10 +100,12 @@ jobs:
           if calendar_meta['source'] != 'B3_COTAHIST_ANNUAL_ARCHIVES':
               raise SystemExit('fonte do calendario real inesperada')
 
-          market = opt.load_market(snapshot, '2025-03-03', '2025-12-30')
-          pairs, gap, momentum, vol = opt.precompute_shard(market, [5], [2], [5], 21)
+          start, end = '2025-03-03', '2025-12-30'
+          market = opt.load_market(snapshot, start, end)
+          original = opt.precompute_shard(market, [5], [2], [5], 21)
+          pairs, gap, momentum, vol = original
           targets = opt.first_ranked_targets(gap, momentum[0], vol)
-          fast = opt.simulate_pairs(
+          primary = opt.simulate_pairs(
               targets, gap, momentum[0], vol, market,
               initial_cash=1000.0, fee_bps=3.25,
               slippage_bps=10.0, odd_lot_extra_bps=5.0,
@@ -103,27 +115,47 @@ jobs:
               initial_cash=1000.0, fee_bps=3.25,
               slippage_bps=10.0, odd_lot_extra_bps=5.0,
           )
+
+          fast_shared.build_fast_cache(snapshot, start, end, 5, 5, 21)
+          cached_market = fast_shared.load_fast_cache(snapshot, start, end, [5], 21)
+          cached = accelerated.fast_precompute_shard(cached_market, [5], [2], [5], 21)
+          cached_targets = opt.first_ranked_targets(cached[1], cached[2][0], cached[3])
+          batched = fast_batch.simulate_momentum_batch(
+              cached_targets[None, :, :], cached[1], cached[2], cached[3], cached_market,
+              initial_cash=1000.0, fee_bps=3.25,
+              slippage_bps=10.0, odd_lot_extra_bps=5.0,
+          )
+
           checks = {
-              'pairs': pairs == [(5, 2)],
+              'pairs': pairs == [(5, 2)] == cached[0],
               'execution_dates': np.array_equal(market.execution_dates.values, slow['execution_dates'].values),
               'decision_dates': np.array_equal(market.decision_dates.values, slow['decision_dates'].values),
-              'gap': np.array_equal(gap[0], slow['gap_state']),
-              'momentum': np.allclose(momentum[0], slow['momentum'], rtol=1e-12, atol=1e-12, equal_nan=True),
-              'vol': np.array_equal(vol, slow['vol_valid']),
-              'targets': np.array_equal(targets[0], slow['base_targets']),
-              'equity': math.isclose(float(fast['final_equity'][0]), float(slow['final_equity']), rel_tol=1e-10, abs_tol=1e-7),
-              'trades': int(fast['trades'][0]) == int(slow['trades']),
-              'fees': math.isclose(float(fast['fees'][0]), float(slow['fees']), rel_tol=1e-10, abs_tol=1e-7),
+              'gap_reference': np.array_equal(gap[0], slow['gap_state']),
+              'momentum_reference': np.allclose(momentum[0], slow['momentum'], rtol=1e-12, atol=1e-12, equal_nan=True),
+              'vol_reference': np.array_equal(vol, slow['vol_valid']),
+              'targets_reference': np.array_equal(targets[0], slow['base_targets']),
+              'cache_gap_bit_exact': np.array_equal(gap, cached[1]),
+              'cache_momentum_bit_exact': np.array_equal(momentum, cached[2], equal_nan=True),
+              'cache_vol_bit_exact': np.array_equal(vol, cached[3]),
+              'cache_targets_bit_exact': np.array_equal(targets, cached_targets),
+              'batch_equity_bit_exact': np.array_equal(primary['final_equity'], batched['final_equity'][0]),
+              'batch_cash_bit_exact': np.array_equal(primary['cash'], batched['cash'][0]),
+              'batch_shares_bit_exact': np.array_equal(primary['shares'], batched['shares'][0]),
+              'batch_holding_bit_exact': np.array_equal(primary['holding'], batched['holding'][0]),
+              'batch_trades_bit_exact': np.array_equal(primary['trades'], batched['trades'][0]),
+              'batch_fees_bit_exact': np.array_equal(primary['fees'], batched['fees'][0]),
+              'equity_reference': math.isclose(float(primary['final_equity'][0]), float(slow['final_equity']), rel_tol=1e-10, abs_tol=1e-7),
           }
           print(json.dumps({
               'status': 'PASS' if all(checks.values()) else 'FAIL',
               'archive': str(archive),
               'calendar_sessions': calendar_meta['session_count'],
               'market_end': market.end,
-              'fast_final_equity': float(fast['final_equity'][0]),
+              'primary_final_equity': float(primary['final_equity'][0]),
               'slow_final_equity': float(slow['final_equity']),
+              'fast_cache_sha256': fast_shared.sha256_file(snapshot / fast_shared.CACHE_FILE),
               'checks': checks,
           }, indent=2))
           if not all(checks.values()):
-              raise SystemExit('REAL B3 SMOKE FAIL')
+              raise SystemExit('REAL B3 SPEEDUP SMOKE FAIL')
           PY
