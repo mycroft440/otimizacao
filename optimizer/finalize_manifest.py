@@ -57,6 +57,7 @@ def main():
         "tests/test_reference_equivalence.py",
         "tests/test_oos_guard.py",
         "tests/test_second_review_regressions.py",
+        "tests/test_workflow_supply_chain.py",
         "tests/fixtures/pine_reference/README.md",
         "README.md",
         ".github/workflows/b3-pine-exhaustive.yml",
