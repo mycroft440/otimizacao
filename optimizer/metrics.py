@@ -24,11 +24,12 @@ def _prepare_curve(curve: pd.DataFrame) -> pd.DataFrame:
 
 
 def year_is_complete(dates: pd.Series) -> bool:
-    """Conservative completeness check without pretending to own a B3 calendar.
+    """Classifica ano completo de forma conservadora sem inventar calendário B3.
 
-    A year is considered complete only when observations reach the first week of
-    January and the final days of December. This deliberately rejects partial
-    first/last years such as a backtest starting in July.
+    Exige observação na primeira semana de janeiro e nos últimos quatro dias de
+    dezembro. Isso rejeita tanto primeiro quanto último ano parciais. O limite de
+    28/dez tolera o último pregão cair antes de 31/dez por fim de semana/feriado,
+    mas não aceita um corte prematuro em dezembro como "ano completo".
     """
     if dates.empty:
         return False
@@ -37,8 +38,8 @@ def year_is_complete(dates: pd.Series) -> bool:
     if first.year != last.year:
         raise ValueError("year_is_complete recebeu mais de um ano")
     starts_in_first_week = first.month == 1 and first.day <= 7
-    ends_in_last_days = last.month == 12 and last.day >= 20
-    return bool(starts_in_first_week and ends_in_last_days)
+    ends_at_year_end = last.month == 12 and last.day >= 28
+    return bool(starts_in_first_week and ends_at_year_end)
 
 
 def annual_metrics(curve: pd.DataFrame, initial_cash: float) -> dict[str, object]:
