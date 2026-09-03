@@ -2,7 +2,7 @@
   "status": "PASS",
   "schema_version": 1,
   "mode": "validated_inside_each_shard_before_topk_retention",
-  "tested_combinations": 66721920,
+  "tested_combinations": 65609888,
   "checks": [
     "finite final_equity/total_return/fees/slippage",
     "nonnegative equity/fees/slippage/trades/skipped",

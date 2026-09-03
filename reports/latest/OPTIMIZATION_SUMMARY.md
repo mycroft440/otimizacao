@@ -1,9 +1,9 @@
 # Otimização exaustiva 4D — B3 Estratégia Live
 
 **Status:** `IN_SAMPLE_EXHAUSTIVE_SUCCESS`
-**Combinações testadas:** 66.721.920
+**Combinações testadas:** 65.609.888
 **Período:** 2018-01-02 até 2026-09-02
-**Grade:** GAP 5–80; Signal 2–60; Momentum 5–252; Vol 1–60.
+**Grade:** GAP 5–80; Signal 2–60; Momentum 5–252; Vol 2–60.
 **Cobertura da grade:** PASS — partições determinísticas, sem sobreposição de GAP e contagem exata por shard.
 **Top-100 global:** exato a partir dos Top-100 locais de cada shard.
 **Reconciliação motor rápido × replay detalhado:** PASS.

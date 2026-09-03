@@ -18,12 +18,12 @@
     1
   ],
   "vol_period": [
-    1,
+    2,
     60,
     1
   ],
-  "expected_combinations": 66721920,
-  "tested_combinations": 66721920,
+  "expected_combinations": 65609888,
+  "tested_combinations": 65609888,
   "exact_partition_coverage": true,
   "global_top_k_exact": true,
   "top_k": 100,
@@ -36,7 +36,7 @@
         45,
         65
       ],
-      "tested_rows": 3511680,
+      "tested_rows": 3453152,
       "retained": 100
     },
     {
@@ -47,7 +47,7 @@
         46,
         66
       ],
-      "tested_rows": 3511680,
+      "tested_rows": 3453152,
       "retained": 100
     },
     {
@@ -58,7 +58,7 @@
         55,
         75
       ],
-      "tested_rows": 3511680,
+      "tested_rows": 3453152,
       "retained": 100
     },
     {
@@ -69,7 +69,7 @@
         56,
         76
       ],
-      "tested_rows": 3511680,
+      "tested_rows": 3453152,
       "retained": 100
     },
     {
@@ -80,7 +80,7 @@
         57,
         77
       ],
-      "tested_rows": 3511680,
+      "tested_rows": 3453152,
       "retained": 100
     },
     {
@@ -91,7 +91,7 @@
         58,
         78
       ],
-      "tested_rows": 3511680,
+      "tested_rows": 3453152,
       "retained": 100
     },
     {
@@ -102,7 +102,7 @@
         59,
         79
       ],
-      "tested_rows": 3511680,
+      "tested_rows": 3453152,
       "retained": 100
     },
     {
@@ -113,7 +113,7 @@
         60,
         80
       ],
-      "tested_rows": 3511680,
+      "tested_rows": 3453152,
       "retained": 100
     },
     {
@@ -123,7 +123,7 @@
         41,
         61
       ],
-      "tested_rows": 2633760,
+      "tested_rows": 2589864,
       "retained": 100
     },
     {
@@ -133,7 +133,7 @@
         42,
         62
       ],
-      "tested_rows": 2633760,
+      "tested_rows": 2589864,
       "retained": 100
     },
     {
@@ -143,7 +143,7 @@
         43,
         63
       ],
-      "tested_rows": 2633760,
+      "tested_rows": 2589864,
       "retained": 100
     },
     {
@@ -153,7 +153,7 @@
         44,
         64
       ],
-      "tested_rows": 2633760,
+      "tested_rows": 2589864,
       "retained": 100
     },
     {
@@ -164,7 +164,7 @@
         47,
         67
       ],
-      "tested_rows": 3511680,
+      "tested_rows": 3453152,
       "retained": 100
     },
     {
@@ -175,7 +175,7 @@
         48,
         68
       ],
-      "tested_rows": 3511680,
+      "tested_rows": 3453152,
       "retained": 100
     },
     {
@@ -186,7 +186,7 @@
         49,
         69
       ],
-      "tested_rows": 3511680,
+      "tested_rows": 3453152,
       "retained": 100
     },
     {
@@ -197,7 +197,7 @@
         50,
         70
       ],
-      "tested_rows": 3511680,
+      "tested_rows": 3453152,
       "retained": 100
     },
     {
@@ -208,7 +208,7 @@
         51,
         71
       ],
-      "tested_rows": 3511680,
+      "tested_rows": 3453152,
       "retained": 100
     },
     {
@@ -219,7 +219,7 @@
         52,
         72
       ],
-      "tested_rows": 3511680,
+      "tested_rows": 3453152,
       "retained": 100
     },
     {
@@ -230,7 +230,7 @@
         53,
         73
       ],
-      "tested_rows": 3511680,
+      "tested_rows": 3453152,
       "retained": 100
     },
     {
@@ -241,13 +241,13 @@
         54,
         74
       ],
-      "tested_rows": 3511680,
+      "tested_rows": 3453152,
       "retained": 100
     }
   ],
   "provenance": {
-    "github_run_id": "33800369403",
-    "optimizer_sha": "4efae763242336f486111124ed508825ae9ec79d",
+    "github_run_id": "33802444078",
+    "optimizer_sha": "e7301469764c03717264249f3e40ddafb6e1d108",
     "github_repository": "mycroft440/otimizacao",
     "snapshot_upstream_sha": "59b136ee55a9a241f70ea5fadc563dcec14b8c8d",
     "snapshot_universe_sha256": "21fa010d57a2dfa9905f68d2562428418e4473e7c906aabd553a50e5c3b31b18",
