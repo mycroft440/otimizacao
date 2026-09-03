@@ -2,9 +2,12 @@
 """Acelerador exato do otimizador B3 Pine com CLI endurecida."""
 from __future__ import annotations
 
+import json
+import os
 import sys
 
 import numpy as np
+import pandas as pd
 
 import config
 import optimize_b3_pine as opt
@@ -111,11 +114,75 @@ def _hardened_parse_args():
     return args
 
 
+def _write_empty_shard(args) -> None:
+    columns = [
+        "gap_period",
+        "signal_period",
+        "momentum_period",
+        "vol_period",
+        "final_equity",
+        "total_return",
+        "trades",
+        "skipped_executions",
+        "fees_paid",
+        "slippage_impact",
+        "final_holding",
+        "start",
+        "end",
+        "shard",
+    ]
+    args.output.parent.mkdir(parents=True, exist_ok=True)
+    pd.DataFrame(columns=columns).to_csv(args.output, index=False)
+    snapshot_meta_path = args.data_root / "SNAPSHOT_META.json"
+    snapshot_meta = (
+        json.loads(snapshot_meta_path.read_text(encoding="utf-8"))
+        if snapshot_meta_path.exists()
+        else {}
+    )
+    meta = {
+        "schema_version": 2,
+        "shard": args.shard_id,
+        "shards": args.shards,
+        "gap_values": [],
+        "signal_min": args.signal_min,
+        "signal_max": args.signal_max,
+        "momentum_min": args.momentum_min,
+        "momentum_max": args.momentum_max,
+        "vol_period": args.vol_period,
+        "rows": 0,
+        "start": args.start,
+        "end": args.end or str(snapshot_meta.get("requested_end", "")),
+        "initial_cash": args.initial_cash,
+        "fee_bps": args.fee_bps,
+        "slippage_bps": args.slippage_bps,
+        "odd_lot_extra_bps": args.odd_lot_extra_bps,
+        "portfolio_policy": "pine_v17_hold_same_target_no_residual_reinvestment",
+        "momentum_dtype": "float64",
+        "csv_sha256": opt.sha256_file(args.output),
+        "github_run_id": os.environ.get("GITHUB_RUN_ID", ""),
+        "optimizer_sha": os.environ.get("GITHUB_SHA", ""),
+        "github_repository": os.environ.get("GITHUB_REPOSITORY", ""),
+        "snapshot_upstream_sha": snapshot_meta.get("upstream_sha", ""),
+        "snapshot_universe_sha256": snapshot_meta.get("universe_sha256", ""),
+        "snapshot_requested_end": snapshot_meta.get("requested_end", ""),
+    }
+    args.output.with_suffix(".json").write_text(
+        json.dumps(meta, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+    )
+
+
 _ORIGINAL_PARSE_ARGS = opt.parse_args
 
 
 def main() -> None:
-    opt.parse_args = _hardened_parse_args
+    args = _hardened_parse_args()
+    gap_values = list(range(args.gap_min, args.gap_max + 1))[args.shard_id :: args.shards]
+    if not gap_values:
+        _write_empty_shard(args)
+        print(f"shard={args.shard_id} tested=0 empty_gap_assignment=true")
+        return
+
+    opt.parse_args = lambda: args
     opt.precompute_shard = fast_precompute_shard
     opt.main()
 
