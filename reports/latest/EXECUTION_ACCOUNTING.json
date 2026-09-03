@@ -1,0 +1,44 @@
+{
+  "status": "PASS",
+  "schema_version": 1,
+  "github_run_id": "33802444078",
+  "optimizer_sha": "e7301469764c03717264249f3e40ddafb6e1d108",
+  "period": {
+    "start": "2018-01-02",
+    "end": "2026-09-02"
+  },
+  "logical_parameter_combinations": 65609888,
+  "physical_simulated_rows": 8896256,
+  "exact_simulation_reduction_factor": 7.375,
+  "vol_period_values": 59,
+  "unique_vol_gate_matrices": 8,
+  "vol_gate_groups": [
+    [2],
+    [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32],
+    [33, 34, 35, 36],
+    [37, 38, 39, 40, 41],
+    [42, 43, 44, 45, 46],
+    [47, 48, 49, 50],
+    [51, 52, 53, 54, 55],
+    [56, 57, 58, 59, 60]
+  ],
+  "parallel_shards": 20,
+  "shard_0_example": {
+    "logical_combinations": 3453152,
+    "physical_simulations": 468224,
+    "unique_vol_gate_matrices": 8,
+    "heavy_step_started_utc": "2026-09-03T20:34:58Z",
+    "heavy_step_finished_utc": "2026-09-03T20:36:47Z"
+  },
+  "workflow_wall_clock": {
+    "started_utc": "2026-09-03T20:28:20Z",
+    "finished_utc": "2026-09-03T20:38:18Z"
+  },
+  "deduplication_contract": "VOL periods are reused only when their complete [decision_week, ticker] boolean eligibility matrices are byte-for-byte identical. Because downstream portfolio simulation receives VOL only through this boolean matrix, identical matrices imply identical targets and portfolio evolution for every GAP/Signal/Momentum combination.",
+  "independent_snapshot_check": {
+    "status": "PASS",
+    "method": "Recomputed sample variance directly for VOL 2..60 on the exact run #33 market snapshot and regrouped the resulting boolean eligibility matrices independently of the optimizer prefix-sum grouping.",
+    "result": "Exactly the same 8 VOL groups were reproduced."
+  },
+  "interpretation": "The search covers the entire 65,609,888-row logical parameter grid, but it did not execute 65,609,888 independent portfolio simulations. 8,896,256 physical simulations were sufficient because exact-equivalent VOL gates were memoized. This is exact reuse, not heuristic pruning or approximation."
+}
