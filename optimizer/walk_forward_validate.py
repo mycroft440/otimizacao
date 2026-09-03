@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import math
 import sys
@@ -15,14 +14,7 @@ import config
 import metrics
 import optimize_b3_pine as opt
 import reduce_results as red
-
-
-def sha256_file(path: Path) -> str:
-    h = hashlib.sha256()
-    with path.open("rb") as handle:
-        for block in iter(lambda: handle.read(1024 * 1024), b""):
-            h.update(block)
-    return h.hexdigest()
+import validate_top_oos as oos_guard
 
 
 def parse_args():
@@ -49,7 +41,12 @@ def _parse_required_date(value: object, label: str, window_id: str) -> pd.Timest
     return result.normalize()
 
 
-def verify_training(window: dict[str, str], directory: Path) -> tuple[pd.Series, dict[str, object]]:
+def verify_training(
+    window: dict[str, str],
+    directory: Path,
+    *,
+    expected_config: dict[str, float] | None = None,
+) -> tuple[pd.Series, dict[str, object]]:
     window_id = window["id"]
     manifest_path = directory / "MANIFEST.json"
     top_path = directory / "top_100.csv"
@@ -80,9 +77,8 @@ def verify_training(window: dict[str, str], directory: Path) -> tuple[pd.Series,
             f"execution={execution_start.date()} provenance={provenance_start.date()}"
         )
 
-    # The manifest may record the requested calendar cutoff (e.g. 31/Dec) or an
-    # effective last B3 session just before it. It may never cross the requested
-    # cutoff and the difference must be only a short year-end calendar gap.
+    # The manifest may record the effective last B3 session just before a
+    # calendar cutoff such as 31/Dec. It may never cross the requested cutoff.
     if execution_end > requested_end or provenance_end > requested_end:
         raise SystemExit(
             f"{window_id}: treino ultrapassa o fim solicitado: requested={requested_end.date()} "
@@ -99,23 +95,26 @@ def verify_training(window: dict[str, str], directory: Path) -> tuple[pd.Series,
             f"{execution_end.date()} vs {provenance_end.date()}"
         )
 
-    # Leakage guard is based on the proven training endpoint, not merely the
-    # filename/window label. Both the configured cutoff and the proven endpoint
-    # must precede the first holdout date.
     if requested_end >= oos_start:
         raise SystemExit(f"{window_id}: train_end solicitado precisa ser anterior a oos_start")
     if execution_end >= oos_start or provenance_end >= oos_start:
         raise SystemExit(f"{window_id}: treino comprovado invade o holdout")
 
-    expected_hash = str(provenance.get("top_100_sha256") or "")
-    actual_hash = sha256_file(top_path)
-    if not expected_hash or expected_hash != actual_hash:
-        raise SystemExit(f"{window_id}: hash do top_100 nao confere")
+    # Reuse the generic OOS fail-closed provenance gate so walk-forward cannot
+    # silently become less strict than standalone OOS validation.
+    oos_guard.verify_training_source(
+        top_path,
+        manifest_path,
+        window["oos_start"],
+        expected_config=expected_config,
+    )
 
     top = pd.read_csv(top_path)
-    required = {"gap_period", "signal_period", "momentum_period", "vol_period"}
-    if top.empty or not required.issubset(top.columns):
+    required = ["gap_period", "signal_period", "momentum_period", "vol_period"]
+    if top.empty or not set(required).issubset(top.columns):
         raise SystemExit(f"{window_id}: top_100 vazio ou schema invalido")
+    if top[required].isna().any().any() or top.duplicated(required).any():
+        raise SystemExit(f"{window_id}: top_100 contem parametros ausentes ou duplicados")
     return top.iloc[0], manifest
 
 
@@ -142,6 +141,12 @@ def main():
     if not windows:
         raise SystemExit("arquivo de janelas vazio")
 
+    expected_training_config = {
+        "initial_cash": args.initial_cash,
+        "fee_bps": args.fee_bps,
+        "slippage_bps": args.slippage_bps,
+        "odd_lot_extra_bps": args.odd_lot_extra_bps,
+    }
     capital = float(args.initial_cash)
     all_curves = []
     results = []
@@ -150,7 +155,11 @@ def main():
     prior_oos_end: pd.Timestamp | None = None
     for window in windows:
         train_dir = args.training_root / window["id"]
-        winner, manifest = verify_training(window, train_dir)
+        winner, manifest = verify_training(
+            window,
+            train_dir,
+            expected_config=expected_training_config,
+        )
         oos_start = pd.Timestamp(window["oos_start"]).normalize()
         configured_end = (
             pd.Timestamp(window["oos_end"]).normalize() if window.get("oos_end") else snapshot_end
@@ -209,6 +218,7 @@ def main():
             "trades": int(summary["trades"]),
             "training_optimizer_sha": manifest.get("optimizer_sha", ""),
             "training_upstream_sha": manifest.get("upstream_sha", ""),
+            "training_config_matches_walk_forward": True,
         }
         results.append(window_result)
         curve = curve.copy()
@@ -240,9 +250,11 @@ def main():
 
     payload = {
         "status": "PASS",
-        "schema_version": 2,
+        "schema_version": 3,
         "method": "rolling_3y_train_then_next_year_oos_rank1_with_capital_carry",
         "selection_is_strictly_prior_to_each_holdout": True,
+        "training_provenance_gate": "same_strict_gate_as_standalone_oos",
+        "training_configuration_must_match_oos": True,
         "initial_cash": args.initial_cash,
         "final_equity": capital,
         "total_oos_return": capital / args.initial_cash - 1.0,
@@ -266,6 +278,7 @@ def main():
         "# Walk-forward — validacao sequencial fora da amostra",
         "",
         "Cada janela escolhe parametros apenas no treino anterior; o capital final OOS e carregado para a janela seguinte.",
+        "Treinos passam pelo mesmo gate criptografico/configuracional usado na validacao OOS isolada.",
         "",
         "| Janela | Treino comprovado | OOS | Parametros | Retorno OOS | Capital final |",
         "|---|---|---|---|---:|---:|",
