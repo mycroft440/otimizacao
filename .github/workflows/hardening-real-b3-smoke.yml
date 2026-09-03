@@ -1,11 +1,7 @@
 name: Hardening Real B3 Smoke
 
 on:
-  push:
-    branches:
-      - hardening/full-audit-fixes
-    paths:
-      - '.github/workflows/hardening-real-b3-smoke.yml'
+  workflow_dispatch:
 
 permissions:
   contents: read
