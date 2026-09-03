@@ -134,6 +134,32 @@ def sample_vol_positive(closes: np.ndarray, period: int) -> np.ndarray:
     return np.isfinite(var) & (var > 0.0)
 
 
+def _load_master_calendar(data_root: Path, observed_dates: set[pd.Timestamp]) -> pd.DatetimeIndex:
+    """Load the independent B3 session calendar when present.
+
+    Hardened workflows build ``data/calendars/b3_sessions.csv`` directly from
+    annual B3 COTAHIST archives. Synthetic/unit-test datasets may omit it and use
+    the legacy observed-date union as an explicit compatibility fallback.
+    """
+    calendar_path = data_root / "data" / "calendars" / "b3_sessions.csv"
+    if not calendar_path.exists():
+        return pd.DatetimeIndex(sorted(observed_dates))
+    calendar = pd.read_csv(calendar_path, usecols=["date"])
+    dates = pd.DatetimeIndex(
+        pd.to_datetime(calendar["date"].astype(str).str.slice(0, 10), errors="raise")
+    )
+    if dates.empty or dates.has_duplicates or not dates.is_monotonic_increasing:
+        raise RuntimeError("Calendário B3 oficial vazio, duplicado ou fora de ordem.")
+    official = set(dates.tolist())
+    outside = sorted(day for day in observed_dates if day not in official)
+    if outside:
+        raise RuntimeError(
+            "Candles contêm datas ausentes do calendário COTAHIST oficial: "
+            + ", ".join(str(day.date()) for day in outside[:10])
+        )
+    return dates
+
+
 def load_market(data_root: Path, start: str, end: str) -> MarketData:
     universe_path = data_root / "data" / "universes" / "fixed_40_2018.json"
     universe = json.loads(universe_path.read_text(encoding="utf-8"))
@@ -159,12 +185,15 @@ def load_market(data_root: Path, start: str, end: str) -> MarketData:
         frames[ticker] = df
         all_dates.update(df["date"].tolist())
 
-    master = pd.DatetimeIndex(sorted(all_dates))
-    start_ts = pd.Timestamp(start)
-    end_ts = pd.Timestamp(end) if end else master.max()
-    master = master[master <= end_ts]
+    master = _load_master_calendar(data_root, all_dates)
+    start_ts = pd.Timestamp(start).normalize()
+    requested_end_ts = pd.Timestamp(end).normalize() if end else master.max()
+    master = master[master <= requested_end_ts]
     if len(master) < 2:
         raise RuntimeError("Calendário mestre insuficiente.")
+    effective_end_ts = pd.Timestamp(master.max())
+    if effective_end_ts < start_ts:
+        raise RuntimeError("Nenhum pregão B3 dentro do período solicitado.")
 
     iso = master.isocalendar()
     week_key = (iso["year"].astype(str) + "-" + iso["week"].astype(str)).to_numpy()
@@ -190,7 +219,7 @@ def load_market(data_root: Path, start: str, end: str) -> MarketData:
         ok = eidx >= 0
         if np.any(ok):
             exec_open[ok, ti] = df["open"].to_numpy(dtype=np.float64)[eidx[ok]]
-        prior = df[df["date"] <= end_ts]
+        prior = df[df["date"] <= effective_end_ts]
         if not prior.empty:
             final_close[ti] = float(prior.iloc[-1]["close"])
 
@@ -204,7 +233,7 @@ def load_market(data_root: Path, start: str, end: str) -> MarketData:
         decision_index=decision_index,
         final_close=final_close,
         start=start,
-        end=end_ts.date().isoformat(),
+        end=effective_end_ts.date().isoformat(),
     )
 
 
