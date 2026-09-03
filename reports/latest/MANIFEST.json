@@ -2,7 +2,7 @@
   "status": "IN_SAMPLE_EXHAUSTIVE_SUCCESS",
   "strategy": "B3 Pine Gap Momentum + positive momentum + volatility gate + Top1 weekly",
   "upstream_repository": "mycroft440/b3-strategy-lab",
-  "upstream_sha": "ad65c1dbf43ad818a2c9e5870308e062660bcffc",
+  "upstream_sha": "59b136ee55a9a241f70ea5fadc563dcec14b8c8d",
   "universe_count": 40,
   "universe": [
     "ABEV3",
@@ -359,10 +359,10 @@
       }
     ],
     "provenance": {
-      "github_run_id": "33790483909",
-      "optimizer_sha": "102787b696285761958219aad4f29c7dbc229130",
+      "github_run_id": "33800369403",
+      "optimizer_sha": "4efae763242336f486111124ed508825ae9ec79d",
       "github_repository": "mycroft440/otimizacao",
-      "snapshot_upstream_sha": "ad65c1dbf43ad818a2c9e5870308e062660bcffc",
+      "snapshot_upstream_sha": "59b136ee55a9a241f70ea5fadc563dcec14b8c8d",
       "snapshot_universe_sha256": "21fa010d57a2dfa9905f68d2562428418e4473e7c906aabd553a50e5c3b31b18",
       "snapshot_requested_end": "2026-09-02"
     }
@@ -693,7 +693,7 @@
   },
   "schema_version": 3,
   "optimizer_repository": "mycroft440/otimizacao",
-  "optimizer_sha": "102787b696285761958219aad4f29c7dbc229130",
+  "optimizer_sha": "4efae763242336f486111124ed508825ae9ec79d",
   "runtime": {
     "python": "3.12.14",
     "numpy": "2.5.2",
@@ -702,7 +702,7 @@
   },
   "source_identity": {
     "selection": "all git-tracked files under README.md, optimizer/, tests/, .github/workflows/",
-    "tracked_file_count": 49,
+    "tracked_file_count": 50,
     "files_sha256": {
       ".github/workflows/b3-pine-exhaustive.yml": "3ca5354c972024a256f6ecb28b55b31aeda7cbd9f88c87d8dbe57b157a9e9824",
       ".github/workflows/b3-pine-walk-forward.yml": "bf2ca10d14bf409a5e8ef0158e7e567911eb630ddc1a65dbbe7454bf0d5895df",
@@ -735,7 +735,7 @@
       "optimizer/metrics.py": "e449903f37875665c9854ffef17fd967dacdb781ae77db11206331338a41f5cc",
       "optimizer/optimize_b3_pine.py": "76157e9ffe7657448211ac6b1e7b7a552cec654038c13d55cd37c7357f6c70ff",
       "optimizer/optimize_b3_pine_fast.py": "fafb5ea4aab3b2abc81f7405f7125c28d4d3de478b55b833f53e04c9aff88dec",
-      "optimizer/optimize_b3_pine_vol_grid.py": "1e42668dc30df46fa61830bcd46e9bbea6458a05291febaf90733234ee8fd3ed",
+      "optimizer/optimize_b3_pine_vol_grid.py": "966cc19f677a50eb3b61810ffa6a50d7e405dbf9caf4a4a1cc208855f5bac0bf",
       "optimizer/reduce_results.py": "31733db4cd6be275df39efb61003001931a7809eb5d34dea8564f808df9893e8",
       "optimizer/reduce_vol_grid_results.py": "5dc3acab773cb116c9b492d47039b502c7d40931a672e0b6c6e7c935941d2b4a",
       "optimizer/reference_engine.py": "0db9256bb69760d2548f6e1910cfa55edb9112b27b502ebc5e3c4a6940634527",
@@ -751,6 +751,7 @@
       "tests/test_reference_equivalence.py": "d1eb4b768b7426719dd3e674b00dd7c2eb55546d7eb50961f543614d8d943278",
       "tests/test_second_review_regressions.py": "ffa0654d95ef78a5bf86507adf4fd628f2bb1734c280d651789951c75dde4077",
       "tests/test_vol_grid.py": "2d79603439694e40953d2ffba52cef1235695509d66c89ce7cef864d06cd0ba3",
+      "tests/test_vol_grid_acceleration.py": "377ecdde8c98ad9af3ca3488dbfe387459b67a8290e1656474f5609226ccd414",
       "tests/test_walk_forward_guard.py": "6eab841de8b16fefe5969bad8a809c7e695caa7896d86b2d69c7d96a350a6c59",
       "tests/test_workflow_supply_chain.py": "a8995a94ad2b4057817f396ea3c27985549ad8895622aa1e63d93954cd5843bf"
     }
@@ -787,7 +788,7 @@
     "optimizer/metrics.py": "e449903f37875665c9854ffef17fd967dacdb781ae77db11206331338a41f5cc",
     "optimizer/optimize_b3_pine.py": "76157e9ffe7657448211ac6b1e7b7a552cec654038c13d55cd37c7357f6c70ff",
     "optimizer/optimize_b3_pine_fast.py": "fafb5ea4aab3b2abc81f7405f7125c28d4d3de478b55b833f53e04c9aff88dec",
-    "optimizer/optimize_b3_pine_vol_grid.py": "1e42668dc30df46fa61830bcd46e9bbea6458a05291febaf90733234ee8fd3ed",
+    "optimizer/optimize_b3_pine_vol_grid.py": "966cc19f677a50eb3b61810ffa6a50d7e405dbf9caf4a4a1cc208855f5bac0bf",
     "optimizer/reduce_results.py": "31733db4cd6be275df39efb61003001931a7809eb5d34dea8564f808df9893e8",
     "optimizer/reduce_vol_grid_results.py": "5dc3acab773cb116c9b492d47039b502c7d40931a672e0b6c6e7c935941d2b4a",
     "optimizer/reference_engine.py": "0db9256bb69760d2548f6e1910cfa55edb9112b27b502ebc5e3c4a6940634527",
@@ -803,6 +804,7 @@
     "tests/test_reference_equivalence.py": "d1eb4b768b7426719dd3e674b00dd7c2eb55546d7eb50961f543614d8d943278",
     "tests/test_second_review_regressions.py": "ffa0654d95ef78a5bf86507adf4fd628f2bb1734c280d651789951c75dde4077",
     "tests/test_vol_grid.py": "2d79603439694e40953d2ffba52cef1235695509d66c89ce7cef864d06cd0ba3",
+    "tests/test_vol_grid_acceleration.py": "377ecdde8c98ad9af3ca3488dbfe387459b67a8290e1656474f5609226ccd414",
     "tests/test_walk_forward_guard.py": "6eab841de8b16fefe5969bad8a809c7e695caa7896d86b2d69c7d96a350a6c59",
     "tests/test_workflow_supply_chain.py": "a8995a94ad2b4057817f396ea3c27985549ad8895622aa1e63d93954cd5843bf"
   },

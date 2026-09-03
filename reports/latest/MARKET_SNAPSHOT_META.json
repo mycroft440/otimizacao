@@ -1,7 +1,7 @@
 {
   "status": "PASS",
   "schema_version": 5,
-  "upstream_sha": "ad65c1dbf43ad818a2c9e5870308e062660bcffc",
+  "upstream_sha": "59b136ee55a9a241f70ea5fadc563dcec14b8c8d",
   "requested_end": "2026-09-02",
   "actual_master_end": "2026-09-02",
   "calendar_source": "B3_COTAHIST_ANNUAL_ARCHIVES",

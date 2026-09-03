@@ -246,10 +246,10 @@
     }
   ],
   "provenance": {
-    "github_run_id": "33790483909",
-    "optimizer_sha": "102787b696285761958219aad4f29c7dbc229130",
+    "github_run_id": "33800369403",
+    "optimizer_sha": "4efae763242336f486111124ed508825ae9ec79d",
     "github_repository": "mycroft440/otimizacao",
-    "snapshot_upstream_sha": "ad65c1dbf43ad818a2c9e5870308e062660bcffc",
+    "snapshot_upstream_sha": "59b136ee55a9a241f70ea5fadc563dcec14b8c8d",
     "snapshot_universe_sha256": "21fa010d57a2dfa9905f68d2562428418e4473e7c906aabd553a50e5c3b31b18",
     "snapshot_requested_end": "2026-09-02"
   }
