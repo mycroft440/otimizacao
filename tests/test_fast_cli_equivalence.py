@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 import tempfile
 import unittest
@@ -57,21 +58,33 @@ class FastCliEquivalenceTests(unittest.TestCase):
             "--shards", "1",
         ]
 
-    def test_fast_cli_csv_is_byte_exact_to_scalar_cli(self):
+    def test_fast_cli_csv_is_byte_exact_to_scalar_cli_with_parallel_batches(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             self._dataset(root)
             scalar_out = root / "scalar.csv"
             fast_out = root / "fast.csv"
             old_argv = sys.argv[:]
+            old_batch = os.environ.get("B3_MOMENTUM_BATCH")
+            old_workers = os.environ.get("B3_BATCH_WORKERS")
             try:
                 sys.argv = self._argv(root, scalar_out)
                 opt.main()
                 fast_shared.build_fast_cache(root, "2018-01-02", "2020-12-31", 5, 7, 21)
+                os.environ["B3_MOMENTUM_BATCH"] = "1"
+                os.environ["B3_BATCH_WORKERS"] = "3"
                 sys.argv = self._argv(root, fast_out)
                 fast.main()
             finally:
                 sys.argv = old_argv
+                if old_batch is None:
+                    os.environ.pop("B3_MOMENTUM_BATCH", None)
+                else:
+                    os.environ["B3_MOMENTUM_BATCH"] = old_batch
+                if old_workers is None:
+                    os.environ.pop("B3_BATCH_WORKERS", None)
+                else:
+                    os.environ["B3_BATCH_WORKERS"] = old_workers
             self.assertEqual(scalar_out.read_bytes(), fast_out.read_bytes())
 
 
