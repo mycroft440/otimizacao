@@ -41,18 +41,25 @@ def close(a: object, b: float) -> bool:
     return math.isfinite(value) and math.isclose(value, float(b), rel_tol=0.0, abs_tol=1e-12)
 
 
-def main():
-    args = parse_args()
-    if args.expected_shards <= 0:
-        raise SystemExit("expected-shards precisa ser > 0")
+def audit_shard_set(
+    results_dir: Path,
+    *,
+    expected_shards: int,
+    initial_cash: float,
+    fee_bps: float,
+    slippage_bps: float,
+    odd_lot_extra_bps: float,
+) -> dict[str, object]:
+    if expected_shards <= 0:
+        raise ValueError("expected_shards precisa ser > 0")
 
-    csvs = sorted(args.results_dir.rglob("shard_*.csv"))
-    jsons = sorted(args.results_dir.rglob("shard_*.json"))
+    csvs = sorted(results_dir.rglob("shard_*.csv"))
+    jsons = sorted(results_dir.rglob("shard_*.json"))
     failures: list[str] = []
-    if len(csvs) != args.expected_shards:
-        failures.append(f"CSV count {len(csvs)} != expected {args.expected_shards}")
-    if len(jsons) != args.expected_shards:
-        failures.append(f"JSON count {len(jsons)} != expected {args.expected_shards}")
+    if len(csvs) != expected_shards:
+        failures.append(f"CSV count {len(csvs)} != expected {expected_shards}")
+    if len(jsons) != expected_shards:
+        failures.append(f"JSON count {len(jsons)} != expected {expected_shards}")
 
     seen_ids: set[int] = set()
     canonical_contract = None
@@ -81,26 +88,32 @@ def main():
 
         if int(meta.get("shard", -1)) != shard_id:
             failures.append(f"shard {shard_id}: metadata shard={meta.get('shard')}")
-        if int(meta.get("shards", -1)) != args.expected_shards:
+        if int(meta.get("shards", -1)) != expected_shards:
             failures.append(f"shard {shard_id}: metadata shards={meta.get('shards')}")
         if int(meta.get("rows", -1)) != len(frame):
             failures.append(f"shard {shard_id}: rows metadata={meta.get('rows')} csv={len(frame)}")
-        if "shard" not in frame.columns or not (pd.to_numeric(frame["shard"], errors="coerce") == shard_id).all():
+        if "shard" not in frame.columns or not (
+            pd.to_numeric(frame["shard"], errors="coerce") == shard_id
+        ).all():
             failures.append(f"shard {shard_id}: coluna shard do CSV diverge")
 
         if "gap_period" in frame.columns:
-            actual_gaps = sorted(set(pd.to_numeric(frame["gap_period"], errors="raise").astype(int).tolist()))
+            actual_gaps = sorted(
+                set(pd.to_numeric(frame["gap_period"], errors="raise").astype(int).tolist())
+            )
             expected_gaps = sorted(int(x) for x in meta.get("gap_values", []))
             if actual_gaps != expected_gaps:
-                failures.append(f"shard {shard_id}: gap_values divergem metadata={expected_gaps} csv={actual_gaps}")
+                failures.append(
+                    f"shard {shard_id}: gap_values divergem metadata={expected_gaps} csv={actual_gaps}"
+                )
         else:
             failures.append(f"shard {shard_id}: gap_period ausente")
 
         for key, expected in (
-            ("initial_cash", args.initial_cash),
-            ("fee_bps", args.fee_bps),
-            ("slippage_bps", args.slippage_bps),
-            ("odd_lot_extra_bps", args.odd_lot_extra_bps),
+            ("initial_cash", initial_cash),
+            ("fee_bps", fee_bps),
+            ("slippage_bps", slippage_bps),
+            ("odd_lot_extra_bps", odd_lot_extra_bps),
         ):
             if not close(meta.get(key), expected):
                 failures.append(f"shard {shard_id}: {key}={meta.get(key)} esperado={expected}")
@@ -137,25 +150,47 @@ def main():
             }
         )
 
-    expected_ids = set(range(args.expected_shards))
+    expected_ids = set(range(expected_shards))
     if seen_ids != expected_ids:
         failures.append(
-            f"IDs de shard divergentes; missing={sorted(expected_ids-seen_ids)} extra={sorted(seen_ids-expected_ids)}"
+            f"IDs de shard divergentes; missing={sorted(expected_ids-seen_ids)} "
+            f"extra={sorted(seen_ids-expected_ids)}"
         )
 
-    payload = {
+    return {
         "status": "PASS" if not failures else "FAIL",
         "schema_version": 1,
-        "expected_shards": args.expected_shards,
+        "expected_shards": expected_shards,
         "observed_shard_ids": sorted(seen_ids),
         "canonical_contract": canonical_contract,
         "files": file_reports,
         "failures": failures,
     }
+
+
+def main():
+    args = parse_args()
+    payload = audit_shard_set(
+        args.results_dir,
+        expected_shards=args.expected_shards,
+        initial_cash=args.initial_cash,
+        fee_bps=args.fee_bps,
+        slippage_bps=args.slippage_bps,
+        odd_lot_extra_bps=args.odd_lot_extra_bps,
+    )
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-    print(json.dumps({"status": payload["status"], "shards": sorted(seen_ids), "failures": failures}, ensure_ascii=False))
-    if failures:
+    print(
+        json.dumps(
+            {
+                "status": payload["status"],
+                "shards": payload["observed_shard_ids"],
+                "failures": payload["failures"],
+            },
+            ensure_ascii=False,
+        )
+    )
+    if payload["status"] != "PASS":
         raise SystemExit("SHARD SET AUDIT FAIL")
 
 
