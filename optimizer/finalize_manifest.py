@@ -40,6 +40,7 @@ def main():
         "optimizer/reduce_results.py",
         "optimizer/audit_exhaustive_grid.py",
         "optimizer/audit_results_integrity.py",
+        "optimizer/audit_shard_set.py",
         "optimizer/audit_reference_engine.py",
         "optimizer/audit_snapshot.py",
         "optimizer/audit_stale_prices.py",
@@ -55,6 +56,7 @@ def main():
         "tests/test_hardening.py",
         "tests/test_reference_equivalence.py",
         "tests/test_oos_guard.py",
+        "tests/test_second_review_regressions.py",
         "tests/fixtures/pine_reference/README.md",
         "README.md",
         ".github/workflows/b3-pine-exhaustive.yml",
@@ -90,11 +92,16 @@ def main():
         }
     )
     args.manifest.write_text(json.dumps(manifest, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-    print(json.dumps({
-        "optimizer_sha": args.optimizer_sha,
-        "selection_mode": args.selection_mode,
-        "top_100_sha256": manifest["selection_provenance"]["top_100_sha256"],
-    }, ensure_ascii=False))
+    print(
+        json.dumps(
+            {
+                "optimizer_sha": args.optimizer_sha,
+                "selection_mode": args.selection_mode,
+                "top_100_sha256": manifest["selection_provenance"]["top_100_sha256"],
+            },
+            ensure_ascii=False,
+        )
+    )
 
 
 if __name__ == "__main__":
