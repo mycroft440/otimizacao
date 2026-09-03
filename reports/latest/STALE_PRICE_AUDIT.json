@@ -1,0 +1,16 @@
+{
+  "status": "PASS",
+  "schema_version": 3,
+  "calendar_source": "B3_COTAHIST_ANNUAL_ARCHIVES",
+  "warning_threshold_master_sessions": 5,
+  "max_stale_master_sessions_while_invested": 0,
+  "terminal_position_price_age": {
+    "date": "2026-09-02",
+    "holding": "FLRY3",
+    "last_trade_date": "2026-09-02",
+    "stale_master_sessions": 0
+  },
+  "warning_count": 0,
+  "warnings": [],
+  "method_note": "stale sessions use the official B3 COTAHIST session calendar when available; warnings are diagnostic, not proof of delisting/suspension cause"
+}

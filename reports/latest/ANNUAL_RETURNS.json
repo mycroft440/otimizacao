@@ -1,11 +1,11 @@
 {
   "status": "PASS",
+  "schema_version": 2,
   "initial_cash": 1000.0,
   "final_equity": 89280.3256287439,
   "total_return": 88.2803256287439,
   "total_return_pct": 8828.03256287439,
   "complete_years": 8,
-  "partial_terminal_year": true,
   "average_complete_year_return": 0.6004442851746845,
   "average_complete_year_return_pct": 60.044428517468454,
   "geometric_mean_complete_year_return": 0.5619571696415018,
@@ -17,6 +17,7 @@
       "end_equity": 1769.393472020625,
       "return": 0.769393472020625,
       "return_pct": 76.9393472020625,
+      "first_observation": "2018-01-02",
       "last_observation": "2018-12-28",
       "complete_year": true
     },
@@ -26,6 +27,7 @@
       "end_equity": 3894.63521665084,
       "return": 1.201113137488416,
       "return_pct": 120.11131374884161,
+      "first_observation": "2019-01-02",
       "last_observation": "2019-12-30",
       "complete_year": true
     },
@@ -35,6 +37,7 @@
       "end_equity": 6607.655537398071,
       "return": 0.6966044750861855,
       "return_pct": 69.66044750861855,
+      "first_observation": "2020-01-02",
       "last_observation": "2020-12-30",
       "complete_year": true
     },
@@ -44,6 +47,7 @@
       "end_equity": 12489.165489450312,
       "return": 0.8901054116341289,
       "return_pct": 89.0105411634129,
+      "first_observation": "2021-01-04",
       "last_observation": "2021-12-30",
       "complete_year": true
     },
@@ -53,6 +57,7 @@
       "end_equity": 13674.284422899673,
       "return": 0.09489176314065495,
       "return_pct": 9.489176314065496,
+      "first_observation": "2022-01-03",
       "last_observation": "2022-12-29",
       "complete_year": true
     },
@@ -62,6 +67,7 @@
       "end_equity": 17374.48522435089,
       "return": 0.2705955710014827,
       "return_pct": 27.059557100148268,
+      "first_observation": "2023-01-02",
       "last_observation": "2023-12-28",
       "complete_year": true
     },
@@ -71,6 +77,7 @@
       "end_equity": 21743.23188653476,
       "return": 0.25144610650455035,
       "return_pct": 25.144610650455036,
+      "first_observation": "2024-01-02",
       "last_observation": "2024-12-30",
       "complete_year": true
     },
@@ -80,6 +87,7 @@
       "end_equity": 35428.51649985668,
       "return": 0.6294043445214328,
       "return_pct": 62.94043445214328,
+      "first_observation": "2025-01-02",
       "last_observation": "2025-12-30",
       "complete_year": true
     },
@@ -89,6 +97,7 @@
       "end_equity": 89280.3256287439,
       "return": 1.5200130981805309,
       "return_pct": 152.00130981805307,
+      "first_observation": "2026-01-02",
       "last_observation": "2026-09-02",
       "complete_year": false
     }

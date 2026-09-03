@@ -1,0 +1,329 @@
+{
+  "status": "PASS",
+  "start": "2018-01-02",
+  "archive_start_year": 2015,
+  "required_warmup_sessions": 263,
+  "failures": [],
+  "tickers": [
+    {
+      "ticker": "ABEV3",
+      "sessions_before_start": 741,
+      "required_sessions": 263,
+      "enough_before_start": true,
+      "structural_short_history_candidate": false,
+      "first_date": "2015-01-02"
+    },
+    {
+      "ticker": "BBAS3",
+      "sessions_before_start": 741,
+      "required_sessions": 263,
+      "enough_before_start": true,
+      "structural_short_history_candidate": false,
+      "first_date": "2015-01-02"
+    },
+    {
+      "ticker": "BBDC3",
+      "sessions_before_start": 741,
+      "required_sessions": 263,
+      "enough_before_start": true,
+      "structural_short_history_candidate": false,
+      "first_date": "2015-01-02"
+    },
+    {
+      "ticker": "BBSE3",
+      "sessions_before_start": 741,
+      "required_sessions": 263,
+      "enough_before_start": true,
+      "structural_short_history_candidate": false,
+      "first_date": "2015-01-02"
+    },
+    {
+      "ticker": "BRAP4",
+      "sessions_before_start": 741,
+      "required_sessions": 263,
+      "enough_before_start": true,
+      "structural_short_history_candidate": false,
+      "first_date": "2015-01-02"
+    },
+    {
+      "ticker": "BRKM5",
+      "sessions_before_start": 741,
+      "required_sessions": 263,
+      "enough_before_start": true,
+      "structural_short_history_candidate": false,
+      "first_date": "2015-01-02"
+    },
+    {
+      "ticker": "CMIG4",
+      "sessions_before_start": 741,
+      "required_sessions": 263,
+      "enough_before_start": true,
+      "structural_short_history_candidate": false,
+      "first_date": "2015-01-02"
+    },
+    {
+      "ticker": "CSAN3",
+      "sessions_before_start": 741,
+      "required_sessions": 263,
+      "enough_before_start": true,
+      "structural_short_history_candidate": false,
+      "first_date": "2015-01-02"
+    },
+    {
+      "ticker": "CSMG3",
+      "sessions_before_start": 741,
+      "required_sessions": 263,
+      "enough_before_start": true,
+      "structural_short_history_candidate": false,
+      "first_date": "2015-01-02"
+    },
+    {
+      "ticker": "CSNA3",
+      "sessions_before_start": 741,
+      "required_sessions": 263,
+      "enough_before_start": true,
+      "structural_short_history_candidate": false,
+      "first_date": "2015-01-02"
+    },
+    {
+      "ticker": "PRIO3",
+      "sessions_before_start": 621,
+      "required_sessions": 263,
+      "enough_before_start": true,
+      "structural_short_history_candidate": false,
+      "first_date": "2015-06-26"
+    },
+    {
+      "ticker": "EGIE3",
+      "sessions_before_start": 358,
+      "required_sessions": 263,
+      "enough_before_start": true,
+      "structural_short_history_candidate": false,
+      "first_date": "2016-07-21"
+    },
+    {
+      "ticker": "EQTL3",
+      "sessions_before_start": 741,
+      "required_sessions": 263,
+      "enough_before_start": true,
+      "structural_short_history_candidate": false,
+      "first_date": "2015-01-02"
+    },
+    {
+      "ticker": "FLRY3",
+      "sessions_before_start": 741,
+      "required_sessions": 263,
+      "enough_before_start": true,
+      "structural_short_history_candidate": false,
+      "first_date": "2015-01-02"
+    },
+    {
+      "ticker": "GGBR3",
+      "sessions_before_start": 741,
+      "required_sessions": 263,
+      "enough_before_start": true,
+      "structural_short_history_candidate": false,
+      "first_date": "2015-01-02"
+    },
+    {
+      "ticker": "GOAU4",
+      "sessions_before_start": 741,
+      "required_sessions": 263,
+      "enough_before_start": true,
+      "structural_short_history_candidate": false,
+      "first_date": "2015-01-02"
+    },
+    {
+      "ticker": "HYPE3",
+      "sessions_before_start": 741,
+      "required_sessions": 263,
+      "enough_before_start": true,
+      "structural_short_history_candidate": false,
+      "first_date": "2015-01-02"
+    },
+    {
+      "ticker": "IRBR3",
+      "sessions_before_start": 103,
+      "required_sessions": 263,
+      "enough_before_start": false,
+      "structural_short_history_candidate": true,
+      "first_date": "2017-07-31"
+    },
+    {
+      "ticker": "ITSA4",
+      "sessions_before_start": 741,
+      "required_sessions": 263,
+      "enough_before_start": true,
+      "structural_short_history_candidate": false,
+      "first_date": "2015-01-02"
+    },
+    {
+      "ticker": "ITUB4",
+      "sessions_before_start": 741,
+      "required_sessions": 263,
+      "enough_before_start": true,
+      "structural_short_history_candidate": false,
+      "first_date": "2015-01-02"
+    },
+    {
+      "ticker": "JHSF3",
+      "sessions_before_start": 741,
+      "required_sessions": 263,
+      "enough_before_start": true,
+      "structural_short_history_candidate": false,
+      "first_date": "2015-01-02"
+    },
+    {
+      "ticker": "KLBN11",
+      "sessions_before_start": 741,
+      "required_sessions": 263,
+      "enough_before_start": true,
+      "structural_short_history_candidate": false,
+      "first_date": "2015-01-02"
+    },
+    {
+      "ticker": "LREN3",
+      "sessions_before_start": 741,
+      "required_sessions": 263,
+      "enough_before_start": true,
+      "structural_short_history_candidate": false,
+      "first_date": "2015-01-02"
+    },
+    {
+      "ticker": "MGLU3",
+      "sessions_before_start": 741,
+      "required_sessions": 263,
+      "enough_before_start": true,
+      "structural_short_history_candidate": false,
+      "first_date": "2015-01-02"
+    },
+    {
+      "ticker": "MRVE3",
+      "sessions_before_start": 741,
+      "required_sessions": 263,
+      "enough_before_start": true,
+      "structural_short_history_candidate": false,
+      "first_date": "2015-01-02"
+    },
+    {
+      "ticker": "MULT3",
+      "sessions_before_start": 741,
+      "required_sessions": 263,
+      "enough_before_start": true,
+      "structural_short_history_candidate": false,
+      "first_date": "2015-01-02"
+    },
+    {
+      "ticker": "PETR4",
+      "sessions_before_start": 741,
+      "required_sessions": 263,
+      "enough_before_start": true,
+      "structural_short_history_candidate": false,
+      "first_date": "2015-01-02"
+    },
+    {
+      "ticker": "QUAL3",
+      "sessions_before_start": 741,
+      "required_sessions": 263,
+      "enough_before_start": true,
+      "structural_short_history_candidate": false,
+      "first_date": "2015-01-02"
+    },
+    {
+      "ticker": "RADL3",
+      "sessions_before_start": 741,
+      "required_sessions": 263,
+      "enough_before_start": true,
+      "structural_short_history_candidate": false,
+      "first_date": "2015-01-02"
+    },
+    {
+      "ticker": "RAIL3",
+      "sessions_before_start": 199,
+      "required_sessions": 263,
+      "enough_before_start": false,
+      "structural_short_history_candidate": true,
+      "first_date": "2017-03-13"
+    },
+    {
+      "ticker": "RENT3",
+      "sessions_before_start": 741,
+      "required_sessions": 263,
+      "enough_before_start": true,
+      "structural_short_history_candidate": false,
+      "first_date": "2015-01-02"
+    },
+    {
+      "ticker": "SANB11",
+      "sessions_before_start": 741,
+      "required_sessions": 263,
+      "enough_before_start": true,
+      "structural_short_history_candidate": false,
+      "first_date": "2015-01-02"
+    },
+    {
+      "ticker": "SBSP3",
+      "sessions_before_start": 741,
+      "required_sessions": 263,
+      "enough_before_start": true,
+      "structural_short_history_candidate": false,
+      "first_date": "2015-01-02"
+    },
+    {
+      "ticker": "SUZB3",
+      "sessions_before_start": 32,
+      "required_sessions": 263,
+      "enough_before_start": false,
+      "structural_short_history_candidate": true,
+      "first_date": "2017-11-10"
+    },
+    {
+      "ticker": "TAEE11",
+      "sessions_before_start": 741,
+      "required_sessions": 263,
+      "enough_before_start": true,
+      "structural_short_history_candidate": false,
+      "first_date": "2015-01-02"
+    },
+    {
+      "ticker": "TUPY3",
+      "sessions_before_start": 741,
+      "required_sessions": 263,
+      "enough_before_start": true,
+      "structural_short_history_candidate": false,
+      "first_date": "2015-01-02"
+    },
+    {
+      "ticker": "UGPA3",
+      "sessions_before_start": 741,
+      "required_sessions": 263,
+      "enough_before_start": true,
+      "structural_short_history_candidate": false,
+      "first_date": "2015-01-02"
+    },
+    {
+      "ticker": "USIM5",
+      "sessions_before_start": 741,
+      "required_sessions": 263,
+      "enough_before_start": true,
+      "structural_short_history_candidate": false,
+      "first_date": "2015-01-02"
+    },
+    {
+      "ticker": "VALE3",
+      "sessions_before_start": 741,
+      "required_sessions": 263,
+      "enough_before_start": true,
+      "structural_short_history_candidate": false,
+      "first_date": "2015-01-02"
+    },
+    {
+      "ticker": "WEGE3",
+      "sessions_before_start": 741,
+      "required_sessions": 263,
+      "enough_before_start": true,
+      "structural_short_history_candidate": false,
+      "first_date": "2015-01-02"
+    }
+  ]
+}

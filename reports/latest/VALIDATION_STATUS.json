@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "engine_validation": "PASS",
+  "pine_external_golden_validation": "NOT_YET_AVAILABLE",
+  "data_integrity": "PASS",
+  "warmup_validation": "PASS",
+  "grid_integrity": "PASS",
+  "financial_integrity": "PASS",
+  "independent_reference_engine": "PASS",
+  "stale_price_diagnostic": "PASS",
+  "parameter_landscape_robustness_analysis": "PASS",
+  "strategy_validation": "IN_SAMPLE_ONLY",
+  "oos_validation": "NOT_RUN_IN_THIS_WORKFLOW",
+  "walk_forward_validation": "AVAILABLE_IN_SEPARATE_MANUAL_WORKFLOW",
+  "survivorship_safe": false,
+  "income_tax_included": false,
+  "dividends_jcp_included": false
+}

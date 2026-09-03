@@ -1,0 +1,212 @@
+{
+  "status": "PASS",
+  "schema_version": 2,
+  "mode": "independent_slow_reference_vs_primary_engine",
+  "schedule_mapping_independent": true,
+  "execution_open_lookup_independent": true,
+  "random_seed": 20260903,
+  "case_count": 8,
+  "cases": [
+    {
+      "case": [
+        5,
+        2,
+        5,
+        21
+      ],
+      "checks": {
+        "pairs": true,
+        "execution_dates": true,
+        "decision_dates": true,
+        "gap_state": true,
+        "momentum": true,
+        "vol_valid": true,
+        "base_targets": true,
+        "final_equity": true,
+        "cash": true,
+        "shares": true,
+        "holding": true,
+        "trades": true,
+        "skipped": true,
+        "fees": true,
+        "slippage": true
+      }
+    },
+    {
+      "case": [
+        40,
+        20,
+        63,
+        21
+      ],
+      "checks": {
+        "pairs": true,
+        "execution_dates": true,
+        "decision_dates": true,
+        "gap_state": true,
+        "momentum": true,
+        "vol_valid": true,
+        "base_targets": true,
+        "final_equity": true,
+        "cash": true,
+        "shares": true,
+        "holding": true,
+        "trades": true,
+        "skipped": true,
+        "fees": true,
+        "slippage": true
+      }
+    },
+    {
+      "case": [
+        41,
+        15,
+        49,
+        21
+      ],
+      "checks": {
+        "pairs": true,
+        "execution_dates": true,
+        "decision_dates": true,
+        "gap_state": true,
+        "momentum": true,
+        "vol_valid": true,
+        "base_targets": true,
+        "final_equity": true,
+        "cash": true,
+        "shares": true,
+        "holding": true,
+        "trades": true,
+        "skipped": true,
+        "fees": true,
+        "slippage": true
+      }
+    },
+    {
+      "case": [
+        80,
+        60,
+        252,
+        21
+      ],
+      "checks": {
+        "pairs": true,
+        "execution_dates": true,
+        "decision_dates": true,
+        "gap_state": true,
+        "momentum": true,
+        "vol_valid": true,
+        "base_targets": true,
+        "final_equity": true,
+        "cash": true,
+        "shares": true,
+        "holding": true,
+        "trades": true,
+        "skipped": true,
+        "fees": true,
+        "slippage": true
+      }
+    },
+    {
+      "case": [
+        19,
+        17,
+        15,
+        21
+      ],
+      "checks": {
+        "pairs": true,
+        "execution_dates": true,
+        "decision_dates": true,
+        "gap_state": true,
+        "momentum": true,
+        "vol_valid": true,
+        "base_targets": true,
+        "final_equity": true,
+        "cash": true,
+        "shares": true,
+        "holding": true,
+        "trades": true,
+        "skipped": true,
+        "fees": true,
+        "slippage": true
+      }
+    },
+    {
+      "case": [
+        30,
+        58,
+        54,
+        21
+      ],
+      "checks": {
+        "pairs": true,
+        "execution_dates": true,
+        "decision_dates": true,
+        "gap_state": true,
+        "momentum": true,
+        "vol_valid": true,
+        "base_targets": true,
+        "final_equity": true,
+        "cash": true,
+        "shares": true,
+        "holding": true,
+        "trades": true,
+        "skipped": true,
+        "fees": true,
+        "slippage": true
+      }
+    },
+    {
+      "case": [
+        18,
+        48,
+        133,
+        21
+      ],
+      "checks": {
+        "pairs": true,
+        "execution_dates": true,
+        "decision_dates": true,
+        "gap_state": true,
+        "momentum": true,
+        "vol_valid": true,
+        "base_targets": true,
+        "final_equity": true,
+        "cash": true,
+        "shares": true,
+        "holding": true,
+        "trades": true,
+        "skipped": true,
+        "fees": true,
+        "slippage": true
+      }
+    },
+    {
+      "case": [
+        56,
+        6,
+        93,
+        21
+      ],
+      "checks": {
+        "pairs": true,
+        "execution_dates": true,
+        "decision_dates": true,
+        "gap_state": true,
+        "momentum": true,
+        "vol_valid": true,
+        "base_targets": true,
+        "final_equity": true,
+        "cash": true,
+        "shares": true,
+        "holding": true,
+        "trades": true,
+        "skipped": true,
+        "fees": true,
+        "slippage": true
+      }
+    }
+  ],
+  "failures": []
+}

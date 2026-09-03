@@ -1,6 +1,6 @@
 # Retorno por ano — melhor combinacao
 
-| Ano | Retorno | Patrimonio final | Status |
+| Ano | Retorno | Patrimonio final | Cobertura |
 |---:|---:|---:|---|
 | 2018 | 76.94% | R$ 1769.39 | completo |
 | 2019 | 120.11% | R$ 3894.64 | completo |
@@ -16,4 +16,4 @@
 **Media aritmetica somente dos anos completos:** 60.04%
 **Media geometrica somente dos anos completos:** 56.20%
 
-O ano terminal parcial e exibido, mas nao e contado como um ano completo na media.
+Anos iniciais ou terminais com cobertura parcial sao exibidos, mas nao entram nas medias de anos completos.

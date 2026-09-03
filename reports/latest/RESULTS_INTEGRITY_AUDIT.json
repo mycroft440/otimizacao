@@ -1,0 +1,250 @@
+{
+  "status": "PASS",
+  "schema_version": 4,
+  "rows": 1112032,
+  "initial_cash": 1000.0,
+  "expected_costs": {
+    "fee_bps": 3.25,
+    "slippage_bps": 10.0,
+    "odd_lot_extra_bps": 5.0
+  },
+  "expected_provenance": {
+    "github_run_id": "33774569296",
+    "optimizer_sha": "7e9939fcdb2fa9f5c03461df58d46b38711c08be",
+    "github_repository": "mycroft440/otimizacao",
+    "snapshot_upstream_sha": "d5dc65cfbeb75bb8fd4fa4c6cebd9f72b032eafb",
+    "snapshot_universe_sha256": "21fa010d57a2dfa9905f68d2562428418e4473e7c906aabd553a50e5c3b31b18",
+    "snapshot_requested_end": "2026-09-02"
+  },
+  "shard_set": {
+    "status": "PASS",
+    "schema_version": 3,
+    "expected_shards": 20,
+    "observed_shard_ids": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19
+    ],
+    "expected_provenance": {
+      "github_run_id": "33774569296",
+      "optimizer_sha": "7e9939fcdb2fa9f5c03461df58d46b38711c08be",
+      "github_repository": "mycroft440/otimizacao",
+      "snapshot_upstream_sha": "d5dc65cfbeb75bb8fd4fa4c6cebd9f72b032eafb",
+      "snapshot_universe_sha256": "21fa010d57a2dfa9905f68d2562428418e4473e7c906aabd553a50e5c3b31b18",
+      "snapshot_requested_end": "2026-09-02"
+    },
+    "canonical_contract": {
+      "shards": 20,
+      "signal_min": 2,
+      "signal_max": 60,
+      "momentum_min": 5,
+      "momentum_max": 252,
+      "vol_period": 21,
+      "start": "2018-01-02",
+      "end": "2026-09-02",
+      "initial_cash": 1000.0,
+      "fee_bps": 3.25,
+      "slippage_bps": 10.0,
+      "odd_lot_extra_bps": 5.0,
+      "portfolio_policy": "pine_v17_hold_same_target_no_residual_reinvestment",
+      "momentum_dtype": "float64",
+      "github_run_id": "33774569296",
+      "optimizer_sha": "7e9939fcdb2fa9f5c03461df58d46b38711c08be",
+      "github_repository": "mycroft440/otimizacao",
+      "snapshot_upstream_sha": "d5dc65cfbeb75bb8fd4fa4c6cebd9f72b032eafb",
+      "snapshot_universe_sha256": "21fa010d57a2dfa9905f68d2562428418e4473e7c906aabd553a50e5c3b31b18",
+      "snapshot_requested_end": "2026-09-02"
+    },
+    "files": [
+      {
+        "shard": 0,
+        "csv": "shard-results/shard_0.csv",
+        "json": "shard-results/shard_0.json",
+        "rows": 58528,
+        "csv_sha256": "4c737c3dee502abc95d32f6997e1bced3d284e4a48e0b60c1cfe236c1daa4203",
+        "json_sha256": "0f7fcc39a3a5c19761d03fe735346c700b504a0845a5a56c20d1b9dc13e89d6f"
+      },
+      {
+        "shard": 1,
+        "csv": "shard-results/shard_1.csv",
+        "json": "shard-results/shard_1.json",
+        "rows": 58528,
+        "csv_sha256": "c53664c90e59b80b898f5bf5cf8e260881332769254b9546888a860117472729",
+        "json_sha256": "5bc6997695da4d92c8375e89616342e29fd17c58fa85525c97238925ea2aea36"
+      },
+      {
+        "shard": 10,
+        "csv": "shard-results/shard_10.csv",
+        "json": "shard-results/shard_10.json",
+        "rows": 58528,
+        "csv_sha256": "cf39be33c24b6317f4d103d2ff3848cea186a9472782358e4f2e472721500bf3",
+        "json_sha256": "db929a3787ae0d02371ef07ebf873d4f4e012d49a8c84e3b368862066c6258bb"
+      },
+      {
+        "shard": 11,
+        "csv": "shard-results/shard_11.csv",
+        "json": "shard-results/shard_11.json",
+        "rows": 58528,
+        "csv_sha256": "1e81896121a135a7fac272f495ebb47bdf42c14b62364b6520e9a09354ff05f0",
+        "json_sha256": "995d6aade13b051abfae3e9f49049b4cb72a5eb150db6df28105f88051b4c606"
+      },
+      {
+        "shard": 12,
+        "csv": "shard-results/shard_12.csv",
+        "json": "shard-results/shard_12.json",
+        "rows": 58528,
+        "csv_sha256": "356fde63f555eeecc0235db38f7311f9be84b4172c8d337c6c6fdb48c6590efa",
+        "json_sha256": "92f996dbdbba26f0e040b30677b3405d857d958bd6e75dcfc6cce4a46c58e3c9"
+      },
+      {
+        "shard": 13,
+        "csv": "shard-results/shard_13.csv",
+        "json": "shard-results/shard_13.json",
+        "rows": 58528,
+        "csv_sha256": "e88c0da6cf918c6d51f7811a146e502a82f2038baaa57db4b22805b43b9a4da0",
+        "json_sha256": "ecf12dfb82d17e268f53d7ba20726aa348da22e572088e113116146a8ee67095"
+      },
+      {
+        "shard": 14,
+        "csv": "shard-results/shard_14.csv",
+        "json": "shard-results/shard_14.json",
+        "rows": 58528,
+        "csv_sha256": "cb9dfa8c35772e12836369098bd7ed56a10ee80bc9a5b5eeef0392a6bff97f49",
+        "json_sha256": "2812f320cc27702d50566a1e49dbf5d5be99cba8eab6d19b820b4edf72c7a9f5"
+      },
+      {
+        "shard": 15,
+        "csv": "shard-results/shard_15.csv",
+        "json": "shard-results/shard_15.json",
+        "rows": 58528,
+        "csv_sha256": "f19cfc0ffbdeaddcad5c854f1e42a42210423261fa0cfe77df36a92a8d4cf9df",
+        "json_sha256": "dcbc60f1070a4695fbd6a9c09bb6a28d0b7ae5eb11b2fc030537546f76fda313"
+      },
+      {
+        "shard": 16,
+        "csv": "shard-results/shard_16.csv",
+        "json": "shard-results/shard_16.json",
+        "rows": 43896,
+        "csv_sha256": "742d10675d8670a7a69c810c7186190ccbe30620dba78ebda14fcc12bc80b6de",
+        "json_sha256": "99819fc88b711518fc6e9d14510807e1b1d263a2dd6c125965c2eae1b5bcf09f"
+      },
+      {
+        "shard": 17,
+        "csv": "shard-results/shard_17.csv",
+        "json": "shard-results/shard_17.json",
+        "rows": 43896,
+        "csv_sha256": "5565a6de85e0e08ffc045a02b4b56d8d7c859b586fa0f44c14a6e90444f72374",
+        "json_sha256": "9c39bcaa38b2e4defe04b0ed4a892a52700869c8fa34cbdcfd8ecf3ca26e7d37"
+      },
+      {
+        "shard": 18,
+        "csv": "shard-results/shard_18.csv",
+        "json": "shard-results/shard_18.json",
+        "rows": 43896,
+        "csv_sha256": "ff5ad5b20033d4d2ef433e59c75164f71554997225139aa0e46d2d95dddfa046",
+        "json_sha256": "66e41f4219eb3445bf0259524dcf55e51549ff48c765cd08fd6d01eb913c0b8e"
+      },
+      {
+        "shard": 19,
+        "csv": "shard-results/shard_19.csv",
+        "json": "shard-results/shard_19.json",
+        "rows": 43896,
+        "csv_sha256": "eff8d7229910bf36ba1f00125683d3b8e05baee755301209d42c246d1d6ce6bf",
+        "json_sha256": "6a71c3cb6a4dff83dd62677d676c43b3239e7365fa173c7922d40e491f1df834"
+      },
+      {
+        "shard": 2,
+        "csv": "shard-results/shard_2.csv",
+        "json": "shard-results/shard_2.json",
+        "rows": 58528,
+        "csv_sha256": "9bfd4b26a984df1b978d76cd7309f5a0d540d52b3aa6309b319250709a2dd9dc",
+        "json_sha256": "f53ae6dce2061dd7accd36c6de31bf413c0210ececc8aa74b0873efa354e4ae5"
+      },
+      {
+        "shard": 3,
+        "csv": "shard-results/shard_3.csv",
+        "json": "shard-results/shard_3.json",
+        "rows": 58528,
+        "csv_sha256": "130a0dda4ff36e2cfb9f1c583a628b6007ab4f87a57776053aaa4666e7a41050",
+        "json_sha256": "2430d9c158b26a5ee1f31e05b9c47830bd8c16fe448a84df210a175b38418bcf"
+      },
+      {
+        "shard": 4,
+        "csv": "shard-results/shard_4.csv",
+        "json": "shard-results/shard_4.json",
+        "rows": 58528,
+        "csv_sha256": "072d00a3ade9278f5ca80cead4c2f7122c5102eabc9b5c15d09d5eef546bbd89",
+        "json_sha256": "a98f387ab89277a0b8e6926e84957dcb0984168d29ef5045b0970ec60144778c"
+      },
+      {
+        "shard": 5,
+        "csv": "shard-results/shard_5.csv",
+        "json": "shard-results/shard_5.json",
+        "rows": 58528,
+        "csv_sha256": "061fe3e7bffb2d605081b2e29e4005734cea001a6a07490796ab142a71570b6a",
+        "json_sha256": "ec8f301237e07410b7b82ba1fbcd8fd6f2f5c12af1cad35d604045ffa7a8dd1d"
+      },
+      {
+        "shard": 6,
+        "csv": "shard-results/shard_6.csv",
+        "json": "shard-results/shard_6.json",
+        "rows": 58528,
+        "csv_sha256": "07b3f7ec3e886d92d4d9655f663af35fc93502b9eb5db8eeb07317a0c94672ec",
+        "json_sha256": "b28f4d273993122c8832676cb68e7e3cc92221b1b6eb2a9a51284299d6eb1fdb"
+      },
+      {
+        "shard": 7,
+        "csv": "shard-results/shard_7.csv",
+        "json": "shard-results/shard_7.json",
+        "rows": 58528,
+        "csv_sha256": "11041c92f5984923523735af3ba12e505784feb470aaebe8288a823874b91676",
+        "json_sha256": "98eecdd8ea615d130772ea265982539eb35a84fb64d9df34d75fbf427c4a64da"
+      },
+      {
+        "shard": 8,
+        "csv": "shard-results/shard_8.csv",
+        "json": "shard-results/shard_8.json",
+        "rows": 58528,
+        "csv_sha256": "4943b713ab7755755a57701a499d883b58ee56e0ab75ed7653e1cfbac33658ae",
+        "json_sha256": "7d24a4e8752f3aa4f1f9482aae3a5dc44279ee454d3d577bd24e940b10e12081"
+      },
+      {
+        "shard": 9,
+        "csv": "shard-results/shard_9.csv",
+        "json": "shard-results/shard_9.json",
+        "rows": 58528,
+        "csv_sha256": "48743eba6a3bf5071442c6e14aab1a86d2476eb40f1e1e393c694451436d5056",
+        "json_sha256": "cc54a5fa42f7d10b073623a7a852d3ac7b58565cc82c3281b360ad1aec08f335"
+      }
+    ],
+    "failures": []
+  },
+  "checks": {
+    "shard_metadata_reconciles": true,
+    "shards_belong_to_current_run_and_snapshot": true,
+    "required_schema": true,
+    "finite_financial_fields": true,
+    "nonnegative_accounting_fields": true,
+    "integer_count_fields": true,
+    "total_return_reconciles": true,
+    "holding_in_universe_or_cash": true
+  },
+  "failures": []
+}
