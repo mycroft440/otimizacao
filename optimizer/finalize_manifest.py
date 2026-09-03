@@ -40,8 +40,18 @@ def main():
         "optimizer/audit_exhaustive_grid.py",
         "optimizer/audit_results_integrity.py",
         "optimizer/audit_reference_engine.py",
+        "optimizer/audit_snapshot.py",
+        "optimizer/audit_stale_prices.py",
         "optimizer/audit_warmup.py",
+        "optimizer/analyze_robustness.py",
+        "optimizer/build_annual_report.py",
+        "optimizer/harden_best_report.py",
+        "optimizer/validate_top_oos.py",
+        "optimizer/walk_forward_validate.py",
+        "optimizer/walk_forward_windows.json",
+        "tests/test_hardening.py",
         ".github/workflows/b3-pine-exhaustive.yml",
+        ".github/workflows/b3-pine-walk-forward.yml",
     ]
     source_hashes = {}
     for relative in source_paths:
