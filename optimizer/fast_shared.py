@@ -112,3 +112,44 @@ def build_fast_cache(data_root: Path, start: str, end: str, momentum_min: int, m
     }
     (data_root / CACHE_META).write_text(json.dumps(meta, indent=2) + "\n", encoding="utf-8")
     return path
+
+
+def load_fast_cache(data_root: Path, start: str, end: str, momentum_values: list[int], vol_period: int):
+    path = data_root / CACHE_FILE
+    meta_path = data_root / CACHE_META
+    if not path.exists() or not meta_path.exists():
+        return None
+    meta = json.loads(meta_path.read_text(encoding="utf-8"))
+    if int(meta.get("schema_version", -1)) != CACHE_SCHEMA:
+        raise RuntimeError("Fast cache schema incompatível.")
+    if meta.get("cache_sha256") != sha256_file(path):
+        raise RuntimeError("Fast cache SHA-256 divergente.")
+    if str(meta.get("start")) != str(start) or str(meta.get("requested_end")) != str(end):
+        raise RuntimeError("Fast cache pertence a outro período.")
+    if int(meta.get("vol_period", -1)) != int(vol_period):
+        raise RuntimeError("Fast cache usa VOL_PERIOD diferente.")
+
+    with np.load(path, allow_pickle=False) as data:
+        cached_m = data["momentum_values"].astype(np.int32, copy=False)
+        requested = np.asarray(momentum_values, dtype=np.int32)
+        positions = np.searchsorted(cached_m, requested)
+        if len(requested) and (
+            np.any(positions >= len(cached_m)) or np.any(cached_m[positions] != requested)
+        ):
+            raise RuntimeError("Fast cache não cobre todos os Momentum solicitados.")
+        return FastMarketData(
+            tickers=[str(x) for x in data["tickers"].tolist()],
+            execution_dates=pd.DatetimeIndex(data["execution_dates"].astype("datetime64[ns]")),
+            decision_index=data["decision_index"].astype(np.int32, copy=True),
+            exec_open=data["exec_open"].astype(np.float64, copy=True),
+            final_close=data["final_close"].astype(np.float64, copy=True),
+            start=str(data["start"][0]),
+            end=str(data["effective_end"][0]),
+            opens=data["opens"].astype(np.float64, copy=True),
+            closes=data["closes"].astype(np.float64, copy=True),
+            lengths=data["lengths"].astype(np.int32, copy=True),
+            momentum_values=requested.copy(),
+            momentum=data["momentum"][positions].astype(np.float64, copy=True),
+            vol_valid=data["vol_valid"].astype(np.bool_, copy=True),
+            vol_period=int(data["vol_period"][0]),
+        )
