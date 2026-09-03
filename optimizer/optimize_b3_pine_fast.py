@@ -139,6 +139,12 @@ def _write_empty_shard(args) -> None:
         if snapshot_meta_path.exists()
         else {}
     )
+    effective_end = str(
+        snapshot_meta.get("actual_master_end")
+        or snapshot_meta.get("requested_end")
+        or args.end
+        or ""
+    )
     meta = {
         "schema_version": 2,
         "shard": args.shard_id,
@@ -151,7 +157,7 @@ def _write_empty_shard(args) -> None:
         "vol_period": args.vol_period,
         "rows": 0,
         "start": args.start,
-        "end": args.end or str(snapshot_meta.get("requested_end", "")),
+        "end": effective_end,
         "initial_cash": args.initial_cash,
         "fee_bps": args.fee_bps,
         "slippage_bps": args.slippage_bps,
