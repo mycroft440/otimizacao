@@ -10,6 +10,8 @@ from pathlib import Path
 
 import pandas as pd
 
+import build_b3_session_calendar as b3_calendar
+
 
 def parse_args():
     p = argparse.ArgumentParser()
@@ -17,6 +19,12 @@ def parse_args():
     p.add_argument("--upstream-sha", required=True)
     p.add_argument("--requested-end", required=True)
     p.add_argument("--output", required=True, type=Path)
+    p.add_argument(
+        "--archives-dir",
+        type=Path,
+        default=Path("upstream/.cache/cotahist"),
+        help="diretorio dos ZIPs COTAHIST oficiais ja congelados pelo preflight",
+    )
     return p.parse_args()
 
 
@@ -59,6 +67,46 @@ def audit_local_corporate_overrides(tickers: list[str]) -> tuple[list[dict[str, 
     return normalized, sha256(path)
 
 
+def infer_snapshot_start_year(root: Path) -> int:
+    candle_paths = sorted((root / "data/candles").glob("*_1d.csv"))
+    if not candle_paths:
+        raise SystemExit("nenhum candle no snapshot para inferir inicio do calendario")
+    years = []
+    for path in candle_paths:
+        frame = pd.read_csv(path, usecols=["date"], nrows=1)
+        if frame.empty:
+            raise SystemExit(f"candle vazio: {path}")
+        years.append(pd.Timestamp(str(frame.iloc[0]["date"])[:10]).year)
+    return min(years)
+
+
+def ensure_official_calendar(
+    root: Path,
+    requested_end: date,
+    archives_dir: Path,
+) -> bool:
+    """Materializa o calendario independente dentro do snapshot quando necessario."""
+    calendar_path = root / "data/calendars/b3_sessions.csv"
+    meta_path = root / "data/calendars/b3_sessions.json"
+    if calendar_path.exists() and meta_path.exists():
+        return False
+    if calendar_path.exists() != meta_path.exists():
+        raise SystemExit("snapshot contem calendario B3 parcial: CSV/JSON precisam existir juntos")
+    if not archives_dir.exists():
+        raise SystemExit(f"diretorio COTAHIST ausente para criar calendario: {archives_dir}")
+
+    start_year = infer_snapshot_start_year(root)
+    b3_calendar.build_calendar(
+        archives_dir=archives_dir,
+        start_year=start_year,
+        end_year=requested_end.year,
+        requested_end=requested_end,
+        output=calendar_path,
+        meta=meta_path,
+    )
+    return True
+
+
 def load_official_calendar(root: Path, requested_end: date) -> tuple[pd.DatetimeIndex, dict[str, object], Path, Path]:
     calendar_path = root / "data/calendars/b3_sessions.csv"
     meta_path = root / "data/calendars/b3_sessions.json"
@@ -92,10 +140,10 @@ def load_official_calendar(root: Path, requested_end: date) -> tuple[pd.Datetime
 def main():
     args = parse_args()
     requested_end = date.fromisoformat(args.requested_end)
+    calendar_materialized = ensure_official_calendar(args.root, requested_end, args.archives_dir)
     official_dates, calendar_meta, calendar_path, calendar_meta_path = load_official_calendar(
         args.root, requested_end
     )
-    official_set = set(official_dates.tolist())
     official_backtest = official_dates[
         (official_dates >= pd.Timestamp("2018-01-02"))
         & (official_dates <= pd.Timestamp(requested_end))
@@ -191,16 +239,18 @@ def main():
 
     payload = {
         "status": "PASS",
-        "schema_version": 4,
+        "schema_version": 5,
         "upstream_sha": args.upstream_sha,
         "requested_end": args.requested_end,
         "actual_master_end": official_end.isoformat(),
         "calendar_source": "B3_COTAHIST_ANNUAL_ARCHIVES",
+        "calendar_materialized_during_audit": calendar_materialized,
         "calendar_sha256": sha256(calendar_path),
         "calendar_meta_sha256": sha256(calendar_meta_path),
         "calendar_session_count_total": len(official_dates),
         "calendar_session_count_backtest": len(official_backtest),
         "calendar_archive_count": len(calendar_meta.get("archives", [])),
+        "calendar_archives": calendar_meta.get("archives", []),
         "universe_count": 40,
         "universe_sha256": sha256(universe_path),
         "universe": tickers,
@@ -225,6 +275,7 @@ def main():
         "status": payload["status"],
         "actual_master_end": payload["actual_master_end"],
         "calendar_source": payload["calendar_source"],
+        "calendar_materialized_during_audit": calendar_materialized,
         "minimum_session_coverage_ratio": payload["minimum_session_coverage_ratio"],
         "corporate_action_override_count": len(corporate_overrides),
         "extreme_normalized_close_moves": len(extreme_normalized_moves),
