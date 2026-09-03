@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import subprocess
 import sys
@@ -58,9 +59,12 @@ class StalePriceCashTests(unittest.TestCase):
                 [
                     sys.executable,
                     str(ROOT / "optimizer/audit_stale_prices.py"),
-                    "--data-root", str(data_root),
-                    "--curve", str(curve),
-                    "--output", str(output),
+                    "--data-root",
+                    str(data_root),
+                    "--curve",
+                    str(curve),
+                    "--output",
+                    str(output),
                 ],
                 check=True,
                 cwd=ROOT,
@@ -71,7 +75,7 @@ class StalePriceCashTests(unittest.TestCase):
 
 
 class ShardSetAuditTests(unittest.TestCase):
-    def _write_shard(self, directory: Path, shard: int, fee: float = 3.25):
+    def _write_shard(self, directory: Path, shard: int, fee: float = 3.25, run_id: str = "123"):
         csv = directory / f"shard_{shard}.csv"
         pd.DataFrame(
             {
@@ -91,7 +95,9 @@ class ShardSetAuditTests(unittest.TestCase):
                 "shard": [shard],
             }
         ).to_csv(csv, index=False)
+        csv_hash = hashlib.sha256(csv.read_bytes()).hexdigest()
         meta = {
+            "schema_version": 2,
             "shard": shard,
             "shards": 2,
             "gap_values": [5 + shard],
@@ -109,6 +115,13 @@ class ShardSetAuditTests(unittest.TestCase):
             "odd_lot_extra_bps": 5.0,
             "portfolio_policy": "pine_v17_hold_same_target_no_residual_reinvestment",
             "momentum_dtype": "float64",
+            "csv_sha256": csv_hash,
+            "github_run_id": run_id,
+            "optimizer_sha": "abc123",
+            "github_repository": "mycroft440/otimizacao",
+            "snapshot_upstream_sha": "upstream123",
+            "snapshot_universe_sha256": "universe123",
+            "snapshot_requested_end": "2020-12-30",
         }
         csv.with_suffix(".json").write_text(json.dumps(meta), encoding="utf-8")
 
@@ -117,13 +130,20 @@ class ShardSetAuditTests(unittest.TestCase):
             [
                 sys.executable,
                 str(ROOT / "optimizer/audit_shard_set.py"),
-                "--results-dir", str(directory),
-                "--expected-shards", "2",
-                "--initial-cash", "1000",
-                "--fee-bps", "3.25",
-                "--slippage-bps", "10",
-                "--odd-lot-extra-bps", "5",
-                "--output", str(output),
+                "--results-dir",
+                str(directory),
+                "--expected-shards",
+                "2",
+                "--initial-cash",
+                "1000",
+                "--fee-bps",
+                "3.25",
+                "--slippage-bps",
+                "10",
+                "--odd-lot-extra-bps",
+                "5",
+                "--output",
+                str(output),
             ],
             cwd=ROOT,
             capture_output=True,
@@ -143,6 +163,24 @@ class ShardSetAuditTests(unittest.TestCase):
             directory = Path(td)
             self._write_shard(directory, 0)
             self._write_shard(directory, 1, fee=4.0)
+            result = self._run(directory, directory / "audit.json")
+            self.assertNotEqual(result.returncode, 0)
+
+    def test_mixed_run_ids_fail_closed(self):
+        with tempfile.TemporaryDirectory() as td:
+            directory = Path(td)
+            self._write_shard(directory, 0, run_id="123")
+            self._write_shard(directory, 1, run_id="999")
+            result = self._run(directory, directory / "audit.json")
+            self.assertNotEqual(result.returncode, 0)
+
+    def test_csv_tampering_breaks_hash(self):
+        with tempfile.TemporaryDirectory() as td:
+            directory = Path(td)
+            self._write_shard(directory, 0)
+            self._write_shard(directory, 1)
+            with (directory / "shard_1.csv").open("a", encoding="utf-8") as handle:
+                handle.write("\n")
             result = self._run(directory, directory / "audit.json")
             self.assertNotEqual(result.returncode, 0)
 
