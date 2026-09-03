@@ -75,16 +75,22 @@ def sessions_from_archive(path: Path) -> set[str]:
     return sessions
 
 
-def main():
-    args = parse_args()
-    if args.start_year > args.end_year:
+def build_calendar(
+    *,
+    archives_dir: Path,
+    start_year: int,
+    end_year: int,
+    requested_end: date,
+    output: Path,
+    meta: Path,
+) -> dict[str, object]:
+    if start_year > end_year:
         raise SystemExit("start-year maior que end-year")
-    requested_end = date.fromisoformat(args.end)
 
     all_sessions: set[str] = set()
     archives = []
-    for year in range(args.start_year, args.end_year + 1):
-        path = args.archives_dir / f"COTAHIST_A{year}.ZIP"
+    for year in range(start_year, end_year + 1):
+        path = archives_dir / f"COTAHIST_A{year}.ZIP"
         if not path.exists():
             raise SystemExit(f"arquivo COTAHIST ausente: {path}")
         year_sessions = sessions_from_archive(path)
@@ -99,11 +105,9 @@ def main():
     ordered = sorted(all_sessions)
     if not ordered:
         raise SystemExit("calendario oficial vazio")
-    if ordered != sorted(set(ordered)):
-        raise SystemExit("calendario contem duplicatas")
 
-    args.output.parent.mkdir(parents=True, exist_ok=True)
-    pd.DataFrame({"date": ordered}).to_csv(args.output, index=False)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    pd.DataFrame({"date": ordered}).to_csv(output, index=False)
     payload = {
         "status": "PASS",
         "schema_version": 1,
@@ -114,16 +118,29 @@ def main():
         "first_session": ordered[0],
         "last_session": ordered[-1],
         "session_count": len(ordered),
-        "calendar_sha256": sha256(args.output),
+        "calendar_sha256": sha256(output),
         "archives": archives,
     }
-    args.meta.parent.mkdir(parents=True, exist_ok=True)
-    args.meta.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    meta.parent.mkdir(parents=True, exist_ok=True)
+    meta.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    return payload
+
+
+def main():
+    args = parse_args()
+    payload = build_calendar(
+        archives_dir=args.archives_dir,
+        start_year=args.start_year,
+        end_year=args.end_year,
+        requested_end=date.fromisoformat(args.end),
+        output=args.output,
+        meta=args.meta,
+    )
     print(json.dumps({
-        "status": "PASS",
-        "first_session": ordered[0],
-        "last_session": ordered[-1],
-        "session_count": len(ordered),
+        "status": payload["status"],
+        "first_session": payload["first_session"],
+        "last_session": payload["last_session"],
+        "session_count": payload["session_count"],
     }, ensure_ascii=False))
 
 
