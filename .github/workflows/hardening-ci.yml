@@ -3,11 +3,13 @@ name: Hardening CI
 on:
   push:
     branches:
+      - main
       - hardening/full-audit-fixes
     paths:
       - 'optimizer/**'
       - 'tests/**'
       - '.github/workflows/**'
+  workflow_dispatch:
 
 permissions:
   contents: read
