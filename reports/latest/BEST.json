@@ -2,7 +2,7 @@
   "gap_period": 41,
   "signal_period": 15,
   "momentum_period": 49,
-  "vol_period": 21,
+  "vol_period": 2,
   "start": "2018-01-02",
   "end": "2026-09-02",
   "initial_cash": 1000.0,

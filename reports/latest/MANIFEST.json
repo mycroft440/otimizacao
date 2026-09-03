@@ -1,8 +1,8 @@
 {
   "status": "IN_SAMPLE_EXHAUSTIVE_SUCCESS",
-  "strategy": "B3 Pine Gap Momentum + positive momentum + Top1 weekly",
+  "strategy": "B3 Pine Gap Momentum + positive momentum + volatility gate + Top1 weekly",
   "upstream_repository": "mycroft440/b3-strategy-lab",
-  "upstream_sha": "c414ed6cfd8be166d437f1c46acd261795e85818",
+  "upstream_sha": "ad65c1dbf43ad818a2c9e5870308e062660bcffc",
   "universe_count": 40,
   "universe": [
     "ABEV3",
@@ -62,9 +62,14 @@
       252,
       1
     ],
-    "vol_period": 21,
-    "expected_combinations": 1112032,
-    "tested_unique_combinations": 1112032
+    "vol_period": [
+      1,
+      60,
+      1
+    ],
+    "expected_combinations": 66721920,
+    "tested_unique_combinations": 66721920,
+    "storage_mode": "streaming_exact_top_k"
   },
   "execution": {
     "start": "2018-01-02",
@@ -106,11 +111,267 @@
       "final_holding": true
     }
   },
+  "grid_audit": {
+    "status": "PASS",
+    "schema_version": 1,
+    "mode": "exhaustive_4d_streaming_topk",
+    "gap_period": [
+      5,
+      80,
+      1
+    ],
+    "signal_period": [
+      2,
+      60,
+      1
+    ],
+    "momentum_period": [
+      5,
+      252,
+      1
+    ],
+    "vol_period": [
+      1,
+      60,
+      1
+    ],
+    "expected_combinations": 66721920,
+    "tested_combinations": 66721920,
+    "exact_partition_coverage": true,
+    "global_top_k_exact": true,
+    "top_k": 100,
+    "shards": [
+      {
+        "shard": 0,
+        "gap_values": [
+          5,
+          25,
+          45,
+          65
+        ],
+        "tested_rows": 3511680,
+        "retained": 100
+      },
+      {
+        "shard": 1,
+        "gap_values": [
+          6,
+          26,
+          46,
+          66
+        ],
+        "tested_rows": 3511680,
+        "retained": 100
+      },
+      {
+        "shard": 10,
+        "gap_values": [
+          15,
+          35,
+          55,
+          75
+        ],
+        "tested_rows": 3511680,
+        "retained": 100
+      },
+      {
+        "shard": 11,
+        "gap_values": [
+          16,
+          36,
+          56,
+          76
+        ],
+        "tested_rows": 3511680,
+        "retained": 100
+      },
+      {
+        "shard": 12,
+        "gap_values": [
+          17,
+          37,
+          57,
+          77
+        ],
+        "tested_rows": 3511680,
+        "retained": 100
+      },
+      {
+        "shard": 13,
+        "gap_values": [
+          18,
+          38,
+          58,
+          78
+        ],
+        "tested_rows": 3511680,
+        "retained": 100
+      },
+      {
+        "shard": 14,
+        "gap_values": [
+          19,
+          39,
+          59,
+          79
+        ],
+        "tested_rows": 3511680,
+        "retained": 100
+      },
+      {
+        "shard": 15,
+        "gap_values": [
+          20,
+          40,
+          60,
+          80
+        ],
+        "tested_rows": 3511680,
+        "retained": 100
+      },
+      {
+        "shard": 16,
+        "gap_values": [
+          21,
+          41,
+          61
+        ],
+        "tested_rows": 2633760,
+        "retained": 100
+      },
+      {
+        "shard": 17,
+        "gap_values": [
+          22,
+          42,
+          62
+        ],
+        "tested_rows": 2633760,
+        "retained": 100
+      },
+      {
+        "shard": 18,
+        "gap_values": [
+          23,
+          43,
+          63
+        ],
+        "tested_rows": 2633760,
+        "retained": 100
+      },
+      {
+        "shard": 19,
+        "gap_values": [
+          24,
+          44,
+          64
+        ],
+        "tested_rows": 2633760,
+        "retained": 100
+      },
+      {
+        "shard": 2,
+        "gap_values": [
+          7,
+          27,
+          47,
+          67
+        ],
+        "tested_rows": 3511680,
+        "retained": 100
+      },
+      {
+        "shard": 3,
+        "gap_values": [
+          8,
+          28,
+          48,
+          68
+        ],
+        "tested_rows": 3511680,
+        "retained": 100
+      },
+      {
+        "shard": 4,
+        "gap_values": [
+          9,
+          29,
+          49,
+          69
+        ],
+        "tested_rows": 3511680,
+        "retained": 100
+      },
+      {
+        "shard": 5,
+        "gap_values": [
+          10,
+          30,
+          50,
+          70
+        ],
+        "tested_rows": 3511680,
+        "retained": 100
+      },
+      {
+        "shard": 6,
+        "gap_values": [
+          11,
+          31,
+          51,
+          71
+        ],
+        "tested_rows": 3511680,
+        "retained": 100
+      },
+      {
+        "shard": 7,
+        "gap_values": [
+          12,
+          32,
+          52,
+          72
+        ],
+        "tested_rows": 3511680,
+        "retained": 100
+      },
+      {
+        "shard": 8,
+        "gap_values": [
+          13,
+          33,
+          53,
+          73
+        ],
+        "tested_rows": 3511680,
+        "retained": 100
+      },
+      {
+        "shard": 9,
+        "gap_values": [
+          14,
+          34,
+          54,
+          74
+        ],
+        "tested_rows": 3511680,
+        "retained": 100
+      }
+    ],
+    "provenance": {
+      "github_run_id": "33790483909",
+      "optimizer_sha": "102787b696285761958219aad4f29c7dbc229130",
+      "github_repository": "mycroft440/otimizacao",
+      "snapshot_upstream_sha": "ad65c1dbf43ad818a2c9e5870308e062660bcffc",
+      "snapshot_universe_sha256": "21fa010d57a2dfa9905f68d2562428418e4473e7c906aabd553a50e5c3b31b18",
+      "snapshot_requested_end": "2026-09-02"
+    }
+  },
   "best": {
     "gap_period": 41,
     "signal_period": 15,
     "momentum_period": 49,
-    "vol_period": 21,
+    "vol_period": 2,
     "start": "2018-01-02",
     "end": "2026-09-02",
     "initial_cash": 1000.0,
@@ -243,7 +504,7 @@
       "volatility": "sample standard deviation of daily close-to-close returns"
     }
   },
-  "canonical_40_20_63": {
+  "canonical_40_20_63_21": {
     "gap_period": 40,
     "signal_period": 20,
     "momentum_period": 63,
@@ -432,7 +693,7 @@
   },
   "schema_version": 3,
   "optimizer_repository": "mycroft440/otimizacao",
-  "optimizer_sha": "8b4aa7b18ba073cf129bc99b91f84a08af60e452",
+  "optimizer_sha": "102787b696285761958219aad4f29c7dbc229130",
   "runtime": {
     "python": "3.12.14",
     "numpy": "2.5.2",
@@ -441,9 +702,9 @@
   },
   "source_identity": {
     "selection": "all git-tracked files under README.md, optimizer/, tests/, .github/workflows/",
-    "tracked_file_count": 46,
+    "tracked_file_count": 49,
     "files_sha256": {
-      ".github/workflows/b3-pine-exhaustive.yml": "865b0506ca84f299626a26c298a3435edc1a9c6b3f905dafb7a7abd39e0c0905",
+      ".github/workflows/b3-pine-exhaustive.yml": "3ca5354c972024a256f6ecb28b55b31aeda7cbd9f88c87d8dbe57b157a9e9824",
       ".github/workflows/b3-pine-walk-forward.yml": "bf2ca10d14bf409a5e8ef0158e7e567911eb630ddc1a65dbbe7454bf0d5895df",
       ".github/workflows/hardening-ci.yml": "f84015c714714bfb8d2246fe2a2b114734d65cdb967db1c267db4284fb963503",
       ".github/workflows/hardening-real-b3-smoke.yml": "cd71efa5ae7472eeb3a6a349afb04c6a9d98ccffb095262d31aa99d932c3e2de",
@@ -465,7 +726,7 @@
       "optimizer/b3_strategy_live_universe.json": "21fa010d57a2dfa9905f68d2562428418e4473e7c906aabd553a50e5c3b31b18",
       "optimizer/build_annual_report.py": "7c82508ec2d8161365fa5ad9f1a5f12c77daaeb36c4c0fcd09bd8c6ee5573b92",
       "optimizer/build_b3_session_calendar.py": "31127434537c3a2a721f156f3a5b7b80a51176669454a5fcb0a2e84e233ef389",
-      "optimizer/config.py": "bfdba9f71d818775272454548f38a4de1a17c601671d432e8f1cef0f67a43b26",
+      "optimizer/config.py": "790ae0aee90a623a53fa4447ff8a8d9212ead6c0767ca633822c78a3a2ca03c3",
       "optimizer/fast_batch.py": "507711b403543fd12ce57b173f2969aa4787ca8ba1c4ebe286ccba40cde47219",
       "optimizer/fast_gap.py": "6bfe5099ae537595391b0d5d5b31501defb0899c7b132cf5738f8ea24d5a1b3d",
       "optimizer/fast_shared.py": "e4d655978b9e5091acc0530c74161c1d22f302c8404a0f25bf317eff346f3675",
@@ -474,7 +735,9 @@
       "optimizer/metrics.py": "e449903f37875665c9854ffef17fd967dacdb781ae77db11206331338a41f5cc",
       "optimizer/optimize_b3_pine.py": "76157e9ffe7657448211ac6b1e7b7a552cec654038c13d55cd37c7357f6c70ff",
       "optimizer/optimize_b3_pine_fast.py": "fafb5ea4aab3b2abc81f7405f7125c28d4d3de478b55b833f53e04c9aff88dec",
+      "optimizer/optimize_b3_pine_vol_grid.py": "1e42668dc30df46fa61830bcd46e9bbea6458a05291febaf90733234ee8fd3ed",
       "optimizer/reduce_results.py": "31733db4cd6be275df39efb61003001931a7809eb5d34dea8564f808df9893e8",
+      "optimizer/reduce_vol_grid_results.py": "5dc3acab773cb116c9b492d47039b502c7d40931a672e0b6c6e7c935941d2b4a",
       "optimizer/reference_engine.py": "0db9256bb69760d2548f6e1910cfa55edb9112b27b502ebc5e3c4a6940634527",
       "optimizer/requirements.txt": "00c00610ef6dac238b475d3c52b87bfc465d73b872d081920bfa2692a1939119",
       "optimizer/validate_top_oos.py": "8ef0f58d9c1a6362707560858911f823baf7d788d3577d62a5715e206a9e8806",
@@ -487,12 +750,13 @@
       "tests/test_oos_guard.py": "ce950d91aaeabdcbd183b59e76f1e6445d88871a3a42186bd33be21fc51403cb",
       "tests/test_reference_equivalence.py": "d1eb4b768b7426719dd3e674b00dd7c2eb55546d7eb50961f543614d8d943278",
       "tests/test_second_review_regressions.py": "ffa0654d95ef78a5bf86507adf4fd628f2bb1734c280d651789951c75dde4077",
+      "tests/test_vol_grid.py": "2d79603439694e40953d2ffba52cef1235695509d66c89ce7cef864d06cd0ba3",
       "tests/test_walk_forward_guard.py": "6eab841de8b16fefe5969bad8a809c7e695caa7896d86b2d69c7d96a350a6c59",
       "tests/test_workflow_supply_chain.py": "a8995a94ad2b4057817f396ea3c27985549ad8895622aa1e63d93954cd5843bf"
     }
   },
   "optimizer_source_sha256": {
-    ".github/workflows/b3-pine-exhaustive.yml": "865b0506ca84f299626a26c298a3435edc1a9c6b3f905dafb7a7abd39e0c0905",
+    ".github/workflows/b3-pine-exhaustive.yml": "3ca5354c972024a256f6ecb28b55b31aeda7cbd9f88c87d8dbe57b157a9e9824",
     ".github/workflows/b3-pine-walk-forward.yml": "bf2ca10d14bf409a5e8ef0158e7e567911eb630ddc1a65dbbe7454bf0d5895df",
     ".github/workflows/hardening-ci.yml": "f84015c714714bfb8d2246fe2a2b114734d65cdb967db1c267db4284fb963503",
     ".github/workflows/hardening-real-b3-smoke.yml": "cd71efa5ae7472eeb3a6a349afb04c6a9d98ccffb095262d31aa99d932c3e2de",
@@ -514,7 +778,7 @@
     "optimizer/b3_strategy_live_universe.json": "21fa010d57a2dfa9905f68d2562428418e4473e7c906aabd553a50e5c3b31b18",
     "optimizer/build_annual_report.py": "7c82508ec2d8161365fa5ad9f1a5f12c77daaeb36c4c0fcd09bd8c6ee5573b92",
     "optimizer/build_b3_session_calendar.py": "31127434537c3a2a721f156f3a5b7b80a51176669454a5fcb0a2e84e233ef389",
-    "optimizer/config.py": "bfdba9f71d818775272454548f38a4de1a17c601671d432e8f1cef0f67a43b26",
+    "optimizer/config.py": "790ae0aee90a623a53fa4447ff8a8d9212ead6c0767ca633822c78a3a2ca03c3",
     "optimizer/fast_batch.py": "507711b403543fd12ce57b173f2969aa4787ca8ba1c4ebe286ccba40cde47219",
     "optimizer/fast_gap.py": "6bfe5099ae537595391b0d5d5b31501defb0899c7b132cf5738f8ea24d5a1b3d",
     "optimizer/fast_shared.py": "e4d655978b9e5091acc0530c74161c1d22f302c8404a0f25bf317eff346f3675",
@@ -523,7 +787,9 @@
     "optimizer/metrics.py": "e449903f37875665c9854ffef17fd967dacdb781ae77db11206331338a41f5cc",
     "optimizer/optimize_b3_pine.py": "76157e9ffe7657448211ac6b1e7b7a552cec654038c13d55cd37c7357f6c70ff",
     "optimizer/optimize_b3_pine_fast.py": "fafb5ea4aab3b2abc81f7405f7125c28d4d3de478b55b833f53e04c9aff88dec",
+    "optimizer/optimize_b3_pine_vol_grid.py": "1e42668dc30df46fa61830bcd46e9bbea6458a05291febaf90733234ee8fd3ed",
     "optimizer/reduce_results.py": "31733db4cd6be275df39efb61003001931a7809eb5d34dea8564f808df9893e8",
+    "optimizer/reduce_vol_grid_results.py": "5dc3acab773cb116c9b492d47039b502c7d40931a672e0b6c6e7c935941d2b4a",
     "optimizer/reference_engine.py": "0db9256bb69760d2548f6e1910cfa55edb9112b27b502ebc5e3c4a6940634527",
     "optimizer/requirements.txt": "00c00610ef6dac238b475d3c52b87bfc465d73b872d081920bfa2692a1939119",
     "optimizer/validate_top_oos.py": "8ef0f58d9c1a6362707560858911f823baf7d788d3577d62a5715e206a9e8806",
@@ -536,6 +802,7 @@
     "tests/test_oos_guard.py": "ce950d91aaeabdcbd183b59e76f1e6445d88871a3a42186bd33be21fc51403cb",
     "tests/test_reference_equivalence.py": "d1eb4b768b7426719dd3e674b00dd7c2eb55546d7eb50961f543614d8d943278",
     "tests/test_second_review_regressions.py": "ffa0654d95ef78a5bf86507adf4fd628f2bb1734c280d651789951c75dde4077",
+    "tests/test_vol_grid.py": "2d79603439694e40953d2ffba52cef1235695509d66c89ce7cef864d06cd0ba3",
     "tests/test_walk_forward_guard.py": "6eab841de8b16fefe5969bad8a809c7e695caa7896d86b2d69c7d96a350a6c59",
     "tests/test_workflow_supply_chain.py": "a8995a94ad2b4057817f396ea3c27985549ad8895622aa1e63d93954cd5843bf"
   },
@@ -543,6 +810,6 @@
     "mode": "in_sample_full",
     "training_start": "2018-01-02",
     "training_end": "2026-09-02",
-    "top_100_sha256": "1f0b0d78870172215556167e01fa97be2ba66e83b11ae11fcf42e67ef6c90b56"
+    "top_100_sha256": "18b1a14ad36f73e7907b3c478c208fc7d4ed132cf5584db926d328e9f1c17cc9"
   }
 }

@@ -1,6 +1,7 @@
 {
   "status": "PASS",
-  "step": 1,
+  "schema_version": 1,
+  "mode": "exhaustive_4d_streaming_topk",
   "gap_period": [
     5,
     80,
@@ -16,11 +17,240 @@
     252,
     1
   ],
-  "vol_period": 21,
-  "expected_combinations": 1112032,
-  "rows": 1112032,
-  "unique_canonical_ids": 1112032,
-  "missing_count": 0,
-  "duplicate_count": 0,
-  "exact_cartesian_grid_once": true
+  "vol_period": [
+    1,
+    60,
+    1
+  ],
+  "expected_combinations": 66721920,
+  "tested_combinations": 66721920,
+  "exact_partition_coverage": true,
+  "global_top_k_exact": true,
+  "top_k": 100,
+  "shards": [
+    {
+      "shard": 0,
+      "gap_values": [
+        5,
+        25,
+        45,
+        65
+      ],
+      "tested_rows": 3511680,
+      "retained": 100
+    },
+    {
+      "shard": 1,
+      "gap_values": [
+        6,
+        26,
+        46,
+        66
+      ],
+      "tested_rows": 3511680,
+      "retained": 100
+    },
+    {
+      "shard": 10,
+      "gap_values": [
+        15,
+        35,
+        55,
+        75
+      ],
+      "tested_rows": 3511680,
+      "retained": 100
+    },
+    {
+      "shard": 11,
+      "gap_values": [
+        16,
+        36,
+        56,
+        76
+      ],
+      "tested_rows": 3511680,
+      "retained": 100
+    },
+    {
+      "shard": 12,
+      "gap_values": [
+        17,
+        37,
+        57,
+        77
+      ],
+      "tested_rows": 3511680,
+      "retained": 100
+    },
+    {
+      "shard": 13,
+      "gap_values": [
+        18,
+        38,
+        58,
+        78
+      ],
+      "tested_rows": 3511680,
+      "retained": 100
+    },
+    {
+      "shard": 14,
+      "gap_values": [
+        19,
+        39,
+        59,
+        79
+      ],
+      "tested_rows": 3511680,
+      "retained": 100
+    },
+    {
+      "shard": 15,
+      "gap_values": [
+        20,
+        40,
+        60,
+        80
+      ],
+      "tested_rows": 3511680,
+      "retained": 100
+    },
+    {
+      "shard": 16,
+      "gap_values": [
+        21,
+        41,
+        61
+      ],
+      "tested_rows": 2633760,
+      "retained": 100
+    },
+    {
+      "shard": 17,
+      "gap_values": [
+        22,
+        42,
+        62
+      ],
+      "tested_rows": 2633760,
+      "retained": 100
+    },
+    {
+      "shard": 18,
+      "gap_values": [
+        23,
+        43,
+        63
+      ],
+      "tested_rows": 2633760,
+      "retained": 100
+    },
+    {
+      "shard": 19,
+      "gap_values": [
+        24,
+        44,
+        64
+      ],
+      "tested_rows": 2633760,
+      "retained": 100
+    },
+    {
+      "shard": 2,
+      "gap_values": [
+        7,
+        27,
+        47,
+        67
+      ],
+      "tested_rows": 3511680,
+      "retained": 100
+    },
+    {
+      "shard": 3,
+      "gap_values": [
+        8,
+        28,
+        48,
+        68
+      ],
+      "tested_rows": 3511680,
+      "retained": 100
+    },
+    {
+      "shard": 4,
+      "gap_values": [
+        9,
+        29,
+        49,
+        69
+      ],
+      "tested_rows": 3511680,
+      "retained": 100
+    },
+    {
+      "shard": 5,
+      "gap_values": [
+        10,
+        30,
+        50,
+        70
+      ],
+      "tested_rows": 3511680,
+      "retained": 100
+    },
+    {
+      "shard": 6,
+      "gap_values": [
+        11,
+        31,
+        51,
+        71
+      ],
+      "tested_rows": 3511680,
+      "retained": 100
+    },
+    {
+      "shard": 7,
+      "gap_values": [
+        12,
+        32,
+        52,
+        72
+      ],
+      "tested_rows": 3511680,
+      "retained": 100
+    },
+    {
+      "shard": 8,
+      "gap_values": [
+        13,
+        33,
+        53,
+        73
+      ],
+      "tested_rows": 3511680,
+      "retained": 100
+    },
+    {
+      "shard": 9,
+      "gap_values": [
+        14,
+        34,
+        54,
+        74
+      ],
+      "tested_rows": 3511680,
+      "retained": 100
+    }
+  ],
+  "provenance": {
+    "github_run_id": "33790483909",
+    "optimizer_sha": "102787b696285761958219aad4f29c7dbc229130",
+    "github_repository": "mycroft440/otimizacao",
+    "snapshot_upstream_sha": "ad65c1dbf43ad818a2c9e5870308e062660bcffc",
+    "snapshot_universe_sha256": "21fa010d57a2dfa9905f68d2562428418e4473e7c906aabd553a50e5c3b31b18",
+    "snapshot_requested_end": "2026-09-02"
+  }
 }
