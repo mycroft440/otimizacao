@@ -1,18 +1,12 @@
 #!/usr/bin/env python3
-"""Acelerador exato do otimizador B3 Pine.
-
-Mantem o mesmo motor de carteira de ``optimize_b3_pine.py`` e substitui somente
-o precompute dos sinais por uma versao vetorizada/equivalente:
-- Momentum de todos os periodos e calculado em bloco por ativo;
-- o cumsum do Gap Ratio e calculado uma unica vez por GAP e reutilizado para
-  todos os SIGNAL_PERIOD.
-
-O workflow compara este precompute com o original antes de liberar os shards.
-"""
+"""Acelerador exato do otimizador B3 Pine com CLI endurecida."""
 from __future__ import annotations
+
+import sys
 
 import numpy as np
 
+import config
 import optimize_b3_pine as opt
 
 
@@ -43,7 +37,6 @@ def fast_precompute_shard(
         if np.any(decision_ok):
             vol_valid[decision_ok, ti] = vol[didx[decision_ok]]
 
-        # Momentum M x W em uma unica operacao vetorizada.
         if M and W and len(closes):
             prev_idx = didx[None, :] - m_values
             valid = decision_ok[None, :] & (prev_idx >= 0)
@@ -72,9 +65,6 @@ def fast_precompute_shard(
             nz = valid_ratio & (neg_sum != 0.0)
             ratio[nz] = 100.0 * pos_sum[nz] / neg_sum[nz]
             valid_from = g - 1
-
-            # O segmento e identico para todos os Signals desse GAP; o original
-            # recalculava este mesmo cumsum para cada s.
             segment = ratio[valid_from:]
             csum = np.concatenate(([0.0], np.cumsum(segment, dtype=np.float64)))
             for s in signal_values:
@@ -90,7 +80,42 @@ def fast_precompute_shard(
     return pairs, gap_state, momentum, vol_valid
 
 
+def _hardened_parse_args():
+    args = _ORIGINAL_PARSE_ARGS()
+    provided = set(sys.argv[1:])
+    if "--fee-bps" not in provided:
+        args.fee_bps = config.DEFAULT_FEE_BPS
+    if "--slippage-bps" not in provided:
+        args.slippage_bps = config.DEFAULT_SLIPPAGE_BPS
+    if "--odd-lot-extra-bps" not in provided:
+        args.odd_lot_extra_bps = config.DEFAULT_ODD_LOT_EXTRA_BPS
+    if "--initial-cash" not in provided:
+        args.initial_cash = config.DEFAULT_INITIAL_CASH
+    config.validate_run_config(
+        start=args.start,
+        end=args.end,
+        gap_min=args.gap_min,
+        gap_max=args.gap_max,
+        signal_min=args.signal_min,
+        signal_max=args.signal_max,
+        momentum_min=args.momentum_min,
+        momentum_max=args.momentum_max,
+        vol_period=args.vol_period,
+        initial_cash=args.initial_cash,
+        fee_bps=args.fee_bps,
+        slippage_bps=args.slippage_bps,
+        odd_lot_extra_bps=args.odd_lot_extra_bps,
+        shard_id=args.shard_id,
+        shards=args.shards,
+    )
+    return args
+
+
+_ORIGINAL_PARSE_ARGS = opt.parse_args
+
+
 def main() -> None:
+    opt.parse_args = _hardened_parse_args
     opt.precompute_shard = fast_precompute_shard
     opt.main()
 
