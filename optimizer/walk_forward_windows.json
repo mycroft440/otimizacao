@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "windows": [
+    {"id": "w1", "train_start": "2018-01-02", "train_end": "2020-12-31", "oos_start": "2021-01-01", "oos_end": "2021-12-31"},
+    {"id": "w2", "train_start": "2019-01-01", "train_end": "2021-12-31", "oos_start": "2022-01-01", "oos_end": "2022-12-31"},
+    {"id": "w3", "train_start": "2020-01-01", "train_end": "2022-12-31", "oos_start": "2023-01-01", "oos_end": "2023-12-31"},
+    {"id": "w4", "train_start": "2021-01-01", "train_end": "2023-12-31", "oos_start": "2024-01-01", "oos_end": "2024-12-31"},
+    {"id": "w5", "train_start": "2022-01-01", "train_end": "2024-12-31", "oos_start": "2025-01-01", "oos_end": "2025-12-31"},
+    {"id": "w6", "train_start": "2023-01-01", "train_end": "2025-12-31", "oos_start": "2026-01-01", "oos_end": ""}
+  ]
+}
