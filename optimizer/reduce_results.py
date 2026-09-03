@@ -13,6 +13,8 @@ import numpy as np
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import config  # noqa: E402
+import metrics  # noqa: E402
 import optimize_b3_pine as opt  # noqa: E402
 
 
@@ -21,19 +23,19 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--data-root", required=True, type=Path)
     p.add_argument("--results-dir", required=True, type=Path)
     p.add_argument("--output-dir", required=True, type=Path)
-    p.add_argument("--start", default="2018-01-02")
-    p.add_argument("--end", default="")
-    p.add_argument("--gap-min", type=int, default=5)
-    p.add_argument("--gap-max", type=int, default=80)
-    p.add_argument("--signal-min", type=int, default=2)
-    p.add_argument("--signal-max", type=int, default=60)
-    p.add_argument("--momentum-min", type=int, default=5)
-    p.add_argument("--momentum-max", type=int, default=252)
-    p.add_argument("--vol-period", type=int, default=21)
-    p.add_argument("--initial-cash", type=float, default=1000.0)
-    p.add_argument("--fee-bps", type=float, default=3.0)
-    p.add_argument("--slippage-bps", type=float, default=10.0)
-    p.add_argument("--odd-lot-extra-bps", type=float, default=5.0)
+    p.add_argument("--start", default=config.DEFAULT_START)
+    p.add_argument("--end", default=config.DEFAULT_END)
+    p.add_argument("--gap-min", type=int, default=config.DEFAULT_GAP_MIN)
+    p.add_argument("--gap-max", type=int, default=config.DEFAULT_GAP_MAX)
+    p.add_argument("--signal-min", type=int, default=config.DEFAULT_SIGNAL_MIN)
+    p.add_argument("--signal-max", type=int, default=config.DEFAULT_SIGNAL_MAX)
+    p.add_argument("--momentum-min", type=int, default=config.DEFAULT_MOMENTUM_MIN)
+    p.add_argument("--momentum-max", type=int, default=config.DEFAULT_MOMENTUM_MAX)
+    p.add_argument("--vol-period", type=int, default=config.DEFAULT_VOL_PERIOD)
+    p.add_argument("--initial-cash", type=float, default=config.DEFAULT_INITIAL_CASH)
+    p.add_argument("--fee-bps", type=float, default=config.DEFAULT_FEE_BPS)
+    p.add_argument("--slippage-bps", type=float, default=config.DEFAULT_SLIPPAGE_BPS)
+    p.add_argument("--odd-lot-extra-bps", type=float, default=config.DEFAULT_ODD_LOT_EXTRA_BPS)
     p.add_argument("--upstream-sha", default="")
     return p.parse_args()
 
@@ -73,31 +75,6 @@ def build_close_matrix(market: opt.MarketData) -> np.ndarray:
     return matrix
 
 
-def _annual_metrics(curve: pd.DataFrame, initial_cash: float) -> tuple[dict[str, float], float]:
-    dated = curve.assign(_date=pd.to_datetime(curve["date"]))
-    year_end = dated.groupby(dated["_date"].dt.year, sort=True)["equity"].last()
-    annual = year_end.pct_change()
-    if len(year_end):
-        first_year = int(year_end.index[0])
-        annual.loc[first_year] = year_end.loc[first_year] / initial_cash - 1.0
-
-    annual_dict = {str(int(year)): float(value) for year, value in annual.dropna().items()}
-    if not annual_dict:
-        return {}, float("nan")
-
-    # O último ano só entra na média se o replay chegar a dezembro. Assim um corte
-    # em agosto/2026, por exemplo, continua reportado individualmente, mas não é
-    # chamado de "ano completo" na média.
-    last_date = pd.Timestamp(curve.iloc[-1]["date"])
-    complete_values = []
-    for year, value in annual.dropna().items():
-        is_last = int(year) == last_date.year
-        if not is_last or last_date.month == 12:
-            complete_values.append(float(value))
-    avg_complete = float(np.mean(complete_values)) if complete_values else float("nan")
-    return annual_dict, avg_complete
-
-
 def detailed_backtest(
     market: opt.MarketData,
     gap_period: int,
@@ -110,6 +87,17 @@ def detailed_backtest(
     slippage_bps: float,
     odd_lot_extra_bps: float,
 ) -> tuple[dict[str, object], pd.DataFrame]:
+    config.validate_periods(gap_period, signal_period, momentum_period, vol_period)
+    if not math.isfinite(float(initial_cash)) or initial_cash <= 0:
+        raise ValueError("initial_cash precisa ser finito e > 0")
+    for name, value in (
+        ("fee_bps", fee_bps),
+        ("slippage_bps", slippage_bps),
+        ("odd_lot_extra_bps", odd_lot_extra_bps),
+    ):
+        if not math.isfinite(float(value)) or float(value) < 0:
+            raise ValueError(f"{name} precisa ser finito e >= 0")
+
     pairs, gap_state, momentum, vol_valid = opt.precompute_shard(
         market, [gap_period], [signal_period], [momentum_period], vol_period
     )
@@ -147,7 +135,6 @@ def detailed_backtest(
             w = exec_lookup[day]
             target = int(base_targets[w])
 
-            # Mesmo desempate do motor vetorizado/Pine: incumbente elegível vence empate exato.
             if holding >= 0 and target >= 0 and holding != target:
                 inc_m = float(mom[w, holding])
                 top_m = float(mom[w, target])
@@ -162,8 +149,6 @@ def detailed_backtest(
 
             target_for_day = target
 
-            # Pine V17: se o mesmo Top1 continua, não existe ordem. Não usa o caixa
-            # residual para aumentar a posição em semanas posteriores.
             if target != holding:
                 projected = cash
                 valid = True
@@ -245,28 +230,13 @@ def detailed_backtest(
     if curve.empty:
         raise RuntimeError("Curva detalhada vazia.")
 
-    eq = curve["equity"].to_numpy(dtype=np.float64)
-    peak = np.maximum.accumulate(eq)
-    dd = eq / peak - 1.0
-    daily = pd.Series(eq).pct_change().dropna().to_numpy(dtype=np.float64)
-    elapsed_years = (
-        pd.Timestamp(curve.iloc[-1]["date"]) - pd.Timestamp(curve.iloc[0]["date"])
-    ).days / 365.2425
-    final = float(eq[-1])
-    total_return = final / initial_cash - 1.0
-    cagr = (
-        (final / initial_cash) ** (1.0 / elapsed_years) - 1.0
-        if elapsed_years > 0 and final > 0
-        else float("nan")
-    )
-    sample_std = float(np.std(daily, ddof=1)) if len(daily) > 1 else float("nan")
-    vol = sample_std * math.sqrt(252.0) if math.isfinite(sample_std) else float("nan")
-    sharpe = (
-        float(np.mean(daily)) / sample_std * math.sqrt(252.0)
-        if math.isfinite(sample_std) and sample_std > 0.0
-        else float("nan")
-    )
-    annual_returns, avg_complete = _annual_metrics(curve, initial_cash)
+    risk = metrics.risk_metrics(curve[["date", "equity"]], initial_cash)
+    annual = metrics.annual_metrics(curve[["date", "equity"]], initial_cash)
+    final = float(curve.iloc[-1]["equity"])
+    annual_returns = {
+        str(int(item["year"])): float(item["return"])
+        for item in annual["years"]
+    }
 
     summary: dict[str, object] = {
         "gap_period": gap_period,
@@ -278,19 +248,31 @@ def detailed_backtest(
         "initial_cash": initial_cash,
         "final_equity": final,
         "profit": final - initial_cash,
-        "total_return": total_return,
-        "cagr": cagr,
-        "average_complete_year_return": avg_complete,
+        "total_return": float(risk["total_return"]),
+        "cagr": float(risk["cagr"]),
+        "average_complete_year_return": float(annual["average_complete_year_return"]),
+        "geometric_mean_complete_year_return": float(annual["geometric_mean_complete_year_return"]),
         "annual_returns": annual_returns,
-        "max_drawdown": float(np.min(dd)),
-        "annual_volatility": vol,
-        "sharpe": sharpe,
+        "annual_years": annual["years"],
+        "max_drawdown": float(risk["max_drawdown_close_to_close"]),
+        "max_drawdown_close_to_close": float(risk["max_drawdown_close_to_close"]),
+        "annual_volatility": float(risk["annual_volatility_close_to_close"]),
+        "annual_volatility_close_to_close": float(risk["annual_volatility_close_to_close"]),
+        "sharpe": float(risk["sharpe_rf0_close_to_close"]),
+        "sharpe_rf0_close_to_close": float(risk["sharpe_rf0_close_to_close"]),
+        "calmar_close_to_close": float(risk["calmar_close_to_close"]),
         "trades": trades,
         "skipped_executions": skipped,
         "fees_paid": fees_paid,
         "slippage_impact": slippage_paid,
         "final_holding": market.tickers[holding] if holding >= 0 else "CASH",
         "portfolio_policy": "pine_v17_hold_same_target_no_residual_reinvestment",
+        "metric_convention": {
+            "risk_free_rate": 0.0,
+            "annualization_sessions": 252,
+            "drawdown": "daily close-to-close marked equity",
+            "volatility": "sample standard deviation of daily close-to-close returns",
+        },
     }
     return summary, curve
 
@@ -319,6 +301,25 @@ def fmt_pct(v: float) -> str:
 
 def main() -> None:
     args = parse_args()
+    try:
+        config.validate_run_config(
+            start=args.start,
+            end=args.end,
+            gap_min=args.gap_min,
+            gap_max=args.gap_max,
+            signal_min=args.signal_min,
+            signal_max=args.signal_max,
+            momentum_min=args.momentum_min,
+            momentum_max=args.momentum_max,
+            vol_period=args.vol_period,
+            initial_cash=args.initial_cash,
+            fee_bps=args.fee_bps,
+            slippage_bps=args.slippage_bps,
+            odd_lot_extra_bps=args.odd_lot_extra_bps,
+        )
+    except ValueError as exc:
+        raise SystemExit(str(exc)) from exc
+
     args.output_dir.mkdir(parents=True, exist_ok=True)
     csvs = sorted(args.results_dir.rglob("shard_*.csv"))
     if not csvs:
@@ -433,6 +434,7 @@ def main() -> None:
             "income_tax": "excluded",
             "leverage": 1.0,
         },
+        "metric_convention": best["metric_convention"],
         "portfolio_reconciliation": portfolio_reconciliation,
         "best": best,
         "canonical_40_20_63": canonical,
@@ -458,7 +460,8 @@ def main() -> None:
         "",
         "**Status:** `IN_SAMPLE_EXHAUSTIVE_SUCCESS`",
         f"**Combinações testadas:** {unique:,}".replace(",", "."),
-        f"**Período:** {market.start} até {market.end}",
+        f"**Período solicitado:** {market.start} até {market.end}",
+        f"**Curva observada:** {best['start']} até {best['end']}",
         f"**Universo:** {len(market.tickers)} ações",
         "**Carteira:** Top1 semanal; mesmo Top1 = manutenção integral, sem nova ordem.",
         "**Reconciliação motor rápido × replay detalhado:** PASS.",
@@ -470,11 +473,14 @@ def main() -> None:
         f"- MOMENTUM_PERIOD: **{best['momentum_period']}**",
         f"- VOL_PERIOD: **{best['vol_period']}** (fixo)",
         f"- Capital inicial: **R$ {float(best['initial_cash']):.2f}**",
-        f"- Capital final: **R$ {float(best['final_equity']):.2f}**",
+        f"- Patrimônio mark-to-market final: **R$ {float(best['final_equity']):.2f}**",
         f"- Retorno total: **{fmt_pct(float(best['total_return']))}**",
         f"- CAGR: **{fmt_pct(float(best['cagr']))}**",
         f"- Média dos anos completos: **{fmt_pct(float(best['average_complete_year_return']))}**",
-        f"- Max drawdown: **{fmt_pct(float(best['max_drawdown']))}**",
+        f"- Max drawdown close-to-close: **{fmt_pct(float(best['max_drawdown_close_to_close']))}**",
+        f"- Sharpe rf=0 close-to-close: **{float(best['sharpe_rf0_close_to_close']):.4f}**"
+        if math.isfinite(float(best["sharpe_rf0_close_to_close"]))
+        else "- Sharpe rf=0 close-to-close: **N/D**",
         f"- Trades: **{best['trades']}**",
         f"- Execuções puladas: **{best['skipped_executions']}**",
         f"- Taxas: **R$ {float(best['fees_paid']):.2f}**",
@@ -483,16 +489,16 @@ def main() -> None:
         "### Retorno por ano",
         "",
     ]
-    for year, value in dict(best["annual_returns"]).items():
-        marker = " (parcial)" if int(year) == pd.Timestamp(best["end"]).year and pd.Timestamp(best["end"]).month != 12 else ""
-        lines.append(f"- {year}{marker}: **{fmt_pct(float(value))}**")
+    for item in best["annual_years"]:
+        marker = "" if item["complete_year"] else " (parcial)"
+        lines.append(f"- {item['year']}{marker}: **{fmt_pct(float(item['return']))}**")
 
     if canonical:
         lines += [
             "",
             "## Pine original 40/20/63",
             "",
-            f"- Capital final: **R$ {float(canonical['final_equity']):.2f}**",
+            f"- Patrimônio final: **R$ {float(canonical['final_equity']):.2f}**",
             f"- Retorno total: **{fmt_pct(float(canonical['total_return']))}**",
             f"- CAGR: **{fmt_pct(float(canonical['cagr']))}**",
             f"- Vantagem patrimonial da vencedora: **{fmt_pct(float(improvement))}**",
@@ -502,11 +508,13 @@ def main() -> None:
         "",
         "## Metodologia",
         "",
-        f"Busca exaustiva: GAP {args.gap_min}–{args.gap_max}, Signal {args.signal_min}–{args.signal_max} e Momentum {args.momentum_min}–{args.momentum_max}, passo 1; Vol21 fixo.",
+        f"Busca exaustiva: GAP {args.gap_min}–{args.gap_max}, Signal {args.signal_min}–{args.signal_max} e Momentum {args.momentum_min}–{args.momentum_max}, passo 1; Vol{args.vol_period} fixo.",
         "",
         "O sinal usa o fechamento da última sessão da semana anterior e a execução usa a abertura da primeira sessão B3 seguinte. Quando o Top1 não muda, nenhuma ordem é criada. Quando muda, a operação é atômica: se venda ou nova compra não puder ser executada, a carteira anterior permanece intacta.",
         "",
-        "**Atenção:** a vencedora continua sendo in-sample; a validação OOS deve ser considerada separadamente.",
+        "Métricas de risco usam a curva diária marcada a fechamento; Sharpe usa taxa livre de risco zero e anualização por sqrt(252).",
+        "",
+        "**Atenção:** a vencedora continua sendo in-sample; a validação OOS/walk-forward é separada.",
     ]
     (args.output_dir / "OPTIMIZATION_SUMMARY.md").write_text(
         "\n".join(lines) + "\n", encoding="utf-8"
