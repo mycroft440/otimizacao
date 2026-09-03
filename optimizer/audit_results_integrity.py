@@ -43,12 +43,19 @@ def _first_meta(results_dir: Path) -> dict[str, object]:
 def _snapshot_meta_from_universe(universe_path: Path) -> dict[str, object]:
     try:
         root = universe_path.parents[2]
-    except IndexError:
-        return {}
+    except IndexError as exc:
+        raise SystemExit("nao foi possivel resolver raiz do snapshot a partir do universo") from exc
     path = root / "SNAPSHOT_META.json"
     if not path.exists():
-        return {}
-    return json.loads(path.read_text(encoding="utf-8"))
+        raise SystemExit(f"SNAPSHOT_META.json ausente: {path}")
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if payload.get("status") != "PASS":
+        raise SystemExit("SNAPSHOT_META.json nao esta em PASS")
+    required = ["upstream_sha", "universe_sha256", "requested_end"]
+    missing = [key for key in required if not str(payload.get(key) or "")]
+    if missing:
+        raise SystemExit(f"SNAPSHOT_META sem proveniencia obrigatoria: {missing}")
+    return payload
 
 
 def main():
@@ -70,6 +77,19 @@ def main():
     if odd_lot_extra_bps is None:
         odd_lot_extra_bps = float(first_meta.get("odd_lot_extra_bps"))
 
+    snapshot_meta = _snapshot_meta_from_universe(args.universe)
+    current_run_id = os.environ.get("GITHUB_RUN_ID", "")
+    current_sha = os.environ.get("GITHUB_SHA", "")
+    current_repo = os.environ.get("GITHUB_REPOSITORY", "")
+    expected_provenance = {
+        "github_run_id": current_run_id,
+        "optimizer_sha": current_sha.lower(),
+        "github_repository": current_repo,
+        "snapshot_upstream_sha": str(snapshot_meta["upstream_sha"]).lower(),
+        "snapshot_universe_sha256": str(snapshot_meta["universe_sha256"]).lower(),
+        "snapshot_requested_end": str(snapshot_meta["requested_end"]),
+    }
+
     shard_set = audit_shard_set.audit_shard_set(
         args.results_dir,
         expected_shards=int(expected_shards),
@@ -77,12 +97,13 @@ def main():
         fee_bps=float(fee_bps),
         slippage_bps=float(slippage_bps),
         odd_lot_extra_bps=float(odd_lot_extra_bps),
+        expected_provenance=expected_provenance,
     )
     if shard_set["status"] != "PASS":
         args.output.parent.mkdir(parents=True, exist_ok=True)
         payload = {
             "status": "FAIL",
-            "schema_version": 3,
+            "schema_version": 4,
             "rows": 0,
             "initial_cash": args.initial_cash,
             "shard_set": shard_set,
@@ -91,33 +112,6 @@ def main():
         }
         args.output.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
         raise SystemExit("RESULT INTEGRITY AUDIT FAIL: SHARD SET")
-
-    provenance_failures: list[str] = []
-    contract = dict(shard_set.get("canonical_contract") or {})
-    current_run_id = os.environ.get("GITHUB_RUN_ID", "")
-    current_sha = os.environ.get("GITHUB_SHA", "")
-    current_repo = os.environ.get("GITHUB_REPOSITORY", "")
-    if current_run_id and str(contract.get("github_run_id", "")) != current_run_id:
-        provenance_failures.append(
-            f"github_run_id dos shards={contract.get('github_run_id')} atual={current_run_id}"
-        )
-    if current_sha and str(contract.get("optimizer_sha", "")) != current_sha:
-        provenance_failures.append(
-            f"optimizer_sha dos shards={contract.get('optimizer_sha')} atual={current_sha}"
-        )
-    if current_repo and str(contract.get("github_repository", "")) != current_repo:
-        provenance_failures.append(
-            f"github_repository dos shards={contract.get('github_repository')} atual={current_repo}"
-        )
-
-    snapshot_meta = _snapshot_meta_from_universe(args.universe)
-    if snapshot_meta:
-        if str(contract.get("snapshot_upstream_sha", "")) != str(snapshot_meta.get("upstream_sha", "")):
-            provenance_failures.append("snapshot_upstream_sha dos shards diverge do snapshot congelado")
-        if str(contract.get("snapshot_universe_sha256", "")) != str(snapshot_meta.get("universe_sha256", "")):
-            provenance_failures.append("snapshot_universe_sha256 dos shards diverge do snapshot congelado")
-        if str(contract.get("snapshot_requested_end", "")) != str(snapshot_meta.get("requested_end", "")):
-            provenance_failures.append("snapshot_requested_end dos shards diverge do snapshot congelado")
 
     files = sorted(args.results_dir.rglob("shard_*.csv"))
     if not files:
@@ -141,7 +135,7 @@ def main():
     if missing:
         raise SystemExit(f"colunas ausentes: {missing}")
 
-    failures = list(provenance_failures)
+    failures = []
     numeric_nonnegative = [
         "final_equity",
         "trades",
@@ -187,7 +181,7 @@ def main():
 
     payload = {
         "status": "PASS" if not failures else "FAIL",
-        "schema_version": 3,
+        "schema_version": 4,
         "rows": int(len(frame)),
         "initial_cash": args.initial_cash,
         "expected_costs": {
@@ -195,15 +189,11 @@ def main():
             "slippage_bps": float(slippage_bps),
             "odd_lot_extra_bps": float(odd_lot_extra_bps),
         },
-        "current_workflow_identity": {
-            "github_run_id": current_run_id or None,
-            "optimizer_sha": current_sha or None,
-            "github_repository": current_repo or None,
-        },
+        "expected_provenance": expected_provenance,
         "shard_set": shard_set,
         "checks": {
             "shard_metadata_reconciles": shard_set["status"] == "PASS",
-            "shards_belong_to_current_run": not provenance_failures,
+            "shards_belong_to_current_run_and_snapshot": shard_set["status"] == "PASS",
             "required_schema": not missing,
             "finite_financial_fields": not any("NaN/inf" in x for x in failures),
             "nonnegative_accounting_fields": not any("negativo" in x for x in failures),
