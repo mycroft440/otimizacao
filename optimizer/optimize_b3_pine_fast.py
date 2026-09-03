@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import numpy as np
 import pandas as pd
@@ -65,7 +66,15 @@ def _snapshot_meta(args):
     return json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
 
 
-def _write_meta(args, market, gap_values, rows: int, cache_used: bool, batch_size: int) -> None:
+def _write_meta(
+    args,
+    market,
+    gap_values,
+    rows: int,
+    cache_used: bool,
+    batch_size: int,
+    batch_workers: int,
+) -> None:
     snapshot_meta = _snapshot_meta(args)
     meta = {
         "schema_version": 2,
@@ -86,9 +95,10 @@ def _write_meta(args, market, gap_values, rows: int, cache_used: bool, batch_siz
         "odd_lot_extra_bps": args.odd_lot_extra_bps,
         "portfolio_policy": "pine_v17_hold_same_target_no_residual_reinvestment",
         "momentum_dtype": "float64",
-        "performance_engine": "exact_batch_v1",
+        "performance_engine": "exact_batch_v2_parallel",
         "fast_cache_used": bool(cache_used),
         "momentum_batch_size": int(batch_size),
+        "momentum_batch_workers": int(batch_workers),
         "precompute_workers": int(os.environ.get("B3_PRECOMPUTE_WORKERS", min(4, os.cpu_count() or 1))),
         "csv_sha256": opt.sha256_file(args.output),
         "github_run_id": os.environ.get("GITHUB_RUN_ID", ""),
@@ -112,10 +122,12 @@ def _write_empty_shard(args) -> None:
     args.output.parent.mkdir(parents=True, exist_ok=True)
     pd.DataFrame(columns=columns).to_csv(args.output, index=False)
     snapshot = _snapshot_meta(args)
+
     class EmptyMarket:
         start = args.start
         end = str(snapshot.get("actual_master_end") or snapshot.get("requested_end") or args.end or "")
-    _write_meta(args, EmptyMarket(), [], 0, False, 0)
+
+    _write_meta(args, EmptyMarket(), [], 0, False, 0, 0)
 
 
 def _result_frame(args, market, pairs, momentum_values, results):
@@ -151,6 +163,29 @@ def _result_frame(args, market, pairs, momentum_values, results):
     )
 
 
+def _simulate_batch_range(
+    lo: int,
+    hi: int,
+    gap_state: np.ndarray,
+    momentum: np.ndarray,
+    vol_valid: np.ndarray,
+    market,
+    args,
+):
+    targets = np.stack([
+        opt.first_ranked_targets(gap_state, momentum[mi], vol_valid)
+        for mi in range(lo, hi)
+    ], axis=0)
+    simulated = fast_batch.simulate_momentum_batch(
+        targets, gap_state, momentum[lo:hi], vol_valid, market,
+        initial_cash=args.initial_cash,
+        fee_bps=args.fee_bps,
+        slippage_bps=args.slippage_bps,
+        odd_lot_extra_bps=args.odd_lot_extra_bps,
+    )
+    return lo, hi, simulated
+
+
 def main() -> None:
     args = _hardened_parse_args()
     gap_values = list(range(args.gap_min, args.gap_max + 1))[args.shard_id :: args.shards]
@@ -175,6 +210,15 @@ def main() -> None:
     )
     M, P = len(momentum_values), len(pairs)
     batch_size = max(1, int(os.environ.get("B3_MOMENTUM_BATCH", "32")))
+    ranges = [(lo, min(M, lo + batch_size)) for lo in range(0, M, batch_size)]
+    default_batch_workers = min(4, os.cpu_count() or 1, max(1, len(ranges)))
+    batch_workers = max(
+        1,
+        min(
+            len(ranges) or 1,
+            int(os.environ.get("B3_BATCH_WORKERS", default_batch_workers)),
+        ),
+    )
     outputs = {
         "final_equity": np.empty((M, P), dtype=np.float64),
         "total_return": np.empty((M, P), dtype=np.float64),
@@ -187,28 +231,42 @@ def main() -> None:
         "slippage": np.empty((M, P), dtype=np.float64),
     }
 
-    for lo in range(0, M, batch_size):
-        hi = min(M, lo + batch_size)
-        targets = np.stack([
-            opt.first_ranked_targets(gap_state, momentum[mi], vol_valid)
-            for mi in range(lo, hi)
-        ], axis=0)
-        simulated = fast_batch.simulate_momentum_batch(
-            targets, gap_state, momentum[lo:hi], vol_valid, market,
-            initial_cash=args.initial_cash,
-            fee_bps=args.fee_bps,
-            slippage_bps=args.slippage_bps,
-            odd_lot_extra_bps=args.odd_lot_extra_bps,
-        )
+    def store(lo: int, hi: int, simulated) -> None:
         for key in outputs:
             outputs[key][lo:hi] = simulated[key]
 
+    if batch_workers == 1 or len(ranges) <= 1:
+        for lo, hi in ranges:
+            rlo, rhi, simulated = _simulate_batch_range(
+                lo, hi, gap_state, momentum, vol_valid, market, args
+            )
+            store(rlo, rhi, simulated)
+    else:
+        with ThreadPoolExecutor(max_workers=batch_workers, thread_name_prefix="b3-momentum") as pool:
+            futures = [
+                pool.submit(
+                    _simulate_batch_range,
+                    lo,
+                    hi,
+                    gap_state,
+                    momentum,
+                    vol_valid,
+                    market,
+                    args,
+                )
+                for lo, hi in ranges
+            ]
+            for future in as_completed(futures):
+                rlo, rhi, simulated = future.result()
+                store(rlo, rhi, simulated)
+
     result = _result_frame(args, market, pairs, momentum_values, outputs)
     result.to_csv(args.output, index=False, float_format="%.12f")
-    _write_meta(args, market, gap_values, len(result), cache_used, batch_size)
+    _write_meta(args, market, gap_values, len(result), cache_used, batch_size, batch_workers)
     best = result.iloc[0]
     print(
-        f"shard={args.shard_id} tested={len(result)} cache={cache_used} batch={batch_size} best="
+        f"shard={args.shard_id} tested={len(result)} cache={cache_used} "
+        f"batch={batch_size} batch_workers={batch_workers} best="
         f"G{int(best.gap_period)}/S{int(best.signal_period)}/M{int(best.momentum_period)} "
         f"equity={best.final_equity:.2f} return={best.total_return:.2%}"
     )
