@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Gate de equivalencia entre o precompute original e o acelerado."""
+"""Gate de equivalencia entre o motor original e todos os caminhos acelerados."""
 from __future__ import annotations
 
 import argparse
@@ -9,6 +9,8 @@ from pathlib import Path
 import numpy as np
 
 import config
+import fast_batch
+import fast_shared
 import optimize_b3_pine as opt
 import optimize_b3_pine_fast as fast
 
@@ -43,6 +45,18 @@ def representative_values() -> tuple[list[int], list[int], list[int]]:
     return sorted(gaps), sorted(signals), sorted(momentums)
 
 
+def _compare_precompute(label, original, candidate):
+    checks = {
+        "pairs": original[0] == candidate[0],
+        "gap_state_bit_exact": same(original[1], candidate[1]),
+        "momentum_bit_exact": same(original[2], candidate[2]),
+        "vol_valid_bit_exact": same(original[3], candidate[3]),
+    }
+    if not all(checks.values()):
+        raise SystemExit(f"{label} PRECOMPUTE EQUIVALENCE FAIL: {checks}")
+    return checks
+
+
 def main() -> None:
     a = args()
     market = opt.load_market(a.data_root, a.start, a.end)
@@ -51,31 +65,38 @@ def main() -> None:
     accelerated = fast.fast_precompute_shard(
         market, gaps, signals, momentums, config.DEFAULT_VOL_PERIOD
     )
+    direct_checks = _compare_precompute("FAST DIRECT", original, accelerated)
 
-    checks = {
-        "pairs": original[0] == accelerated[0],
-        "gap_state_bit_exact": same(original[1], accelerated[1]),
-        "momentum_bit_exact": same(original[2], accelerated[2]),
-        "vol_valid_bit_exact": same(original[3], accelerated[3]),
-    }
-    if not all(checks.values()):
-        raise SystemExit(f"FAST PRECOMPUTE EQUIVALENCE FAIL: {checks}")
+    # O próprio gate materializa o cache antes de o workflow publicar o snapshot.
+    fast_shared.build_fast_cache(
+        a.data_root,
+        a.start,
+        a.end,
+        config.DEFAULT_MOMENTUM_MIN,
+        config.DEFAULT_MOMENTUM_MAX,
+        config.DEFAULT_VOL_PERIOD,
+    )
+    cached_market = fast_shared.load_fast_cache(
+        a.data_root, a.start, a.end, momentums, config.DEFAULT_VOL_PERIOD
+    )
+    if cached_market is None:
+        raise SystemExit("FAST CACHE BUILD FAIL: cache não foi materializado")
+    cached = fast.fast_precompute_shard(
+        cached_market, gaps, signals, momentums, config.DEFAULT_VOL_PERIOD
+    )
+    cache_checks = _compare_precompute("FAST CACHE", original, cached)
 
-    # Confere também carteira em todos os momentums da amostra ampliada.
     pairs, gap_state, momentum, vol_valid = original
-    _, gap_fast, momentum_fast, vol_fast = accelerated
+    scalar_results = []
+    targets_all = []
     portfolio_checks = []
-    for mi in range(len(momentums)):
-        mom = momentum[mi]
-        mom_fast = momentum_fast[mi]
-        t1 = opt.first_ranked_targets(gap_state, mom, vol_valid)
-        t2 = opt.first_ranked_targets(gap_fast, mom_fast, vol_fast)
-        if not np.array_equal(t1, t2):
-            raise SystemExit(f"FAST TARGET EQUIVALENCE FAIL momentum={momentums[mi]}")
-        s1 = opt.simulate_pairs(
-            t1,
+    for mi, m in enumerate(momentums):
+        targets = opt.first_ranked_targets(gap_state, momentum[mi], vol_valid)
+        targets_all.append(targets)
+        scalar = opt.simulate_pairs(
+            targets,
             gap_state,
-            mom,
+            momentum[mi],
             vol_valid,
             market,
             initial_cash=config.DEFAULT_INITIAL_CASH,
@@ -83,29 +104,52 @@ def main() -> None:
             slippage_bps=config.DEFAULT_SLIPPAGE_BPS,
             odd_lot_extra_bps=config.DEFAULT_ODD_LOT_EXTRA_BPS,
         )
-        s2 = opt.simulate_pairs(
-            t2,
-            gap_fast,
-            mom_fast,
-            vol_fast,
-            market,
+        scalar_results.append(scalar)
+
+        cache_targets = opt.first_ranked_targets(cached[1], cached[2][mi], cached[3])
+        if not np.array_equal(targets, cache_targets):
+            raise SystemExit(f"FAST CACHE TARGET FAIL momentum={m}")
+        cache_scalar = opt.simulate_pairs(
+            cache_targets,
+            cached[1],
+            cached[2][mi],
+            cached[3],
+            cached_market,
             initial_cash=config.DEFAULT_INITIAL_CASH,
             fee_bps=config.DEFAULT_FEE_BPS,
             slippage_bps=config.DEFAULT_SLIPPAGE_BPS,
             odd_lot_extra_bps=config.DEFAULT_ODD_LOT_EXTRA_BPS,
         )
         keys = ["final_equity", "cash", "shares", "holding", "trades", "skipped", "fees", "slippage"]
-        one = {key: same(s1[key], s2[key]) for key in keys}
+        one = {key: same(scalar[key], cache_scalar[key]) for key in keys}
         if not all(one.values()):
-            raise SystemExit(
-                f"FAST PORTFOLIO EQUIVALENCE FAIL momentum={momentums[mi]} checks={one}"
-            )
-        portfolio_checks.append({"momentum": momentums[mi], "checks": one})
+            raise SystemExit(f"FAST CACHE PORTFOLIO FAIL momentum={m} checks={one}")
+        portfolio_checks.append({"momentum": m, "checks": one})
+
+    targets_batch = np.stack(targets_all, axis=0)
+    batch = fast_batch.simulate_momentum_batch(
+        targets_batch,
+        gap_state,
+        momentum,
+        vol_valid,
+        market,
+        initial_cash=config.DEFAULT_INITIAL_CASH,
+        fee_bps=config.DEFAULT_FEE_BPS,
+        slippage_bps=config.DEFAULT_SLIPPAGE_BPS,
+        odd_lot_extra_bps=config.DEFAULT_ODD_LOT_EXTRA_BPS,
+    )
+    batch_checks = []
+    keys = ["final_equity", "cash", "shares", "holding", "trades", "skipped", "fees", "slippage"]
+    for mi, m in enumerate(momentums):
+        one = {key: same(scalar_results[mi][key], batch[key][mi]) for key in keys}
+        if not all(one.values()):
+            raise SystemExit(f"FAST BATCH PORTFOLIO FAIL momentum={m} checks={one}")
+        batch_checks.append({"momentum": m, "checks": one})
 
     payload = {
         "status": "PASS",
-        "schema_version": 2,
-        "mode": "bit_exact_precompute_and_portfolio_deterministic_broad_sample",
+        "schema_version": 3,
+        "mode": "bit_exact_cache_threads_batch_and_portfolio",
         "random_seed": RANDOM_SEED,
         "grid": {
             "gap": gaps,
@@ -115,8 +159,11 @@ def main() -> None:
             "gap_signal_pairs": len(pairs),
             "parameter_combinations_checked": len(pairs) * len(momentums),
         },
-        "checks": checks,
-        "portfolio_checks": portfolio_checks,
+        "direct_precompute_checks": direct_checks,
+        "cache_precompute_checks": cache_checks,
+        "cache_portfolio_checks": portfolio_checks,
+        "batch_portfolio_checks": batch_checks,
+        "cache_sha256": fast_shared.sha256_file(a.data_root / fast_shared.CACHE_FILE),
     }
     a.output.parent.mkdir(parents=True, exist_ok=True)
     a.output.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
