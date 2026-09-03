@@ -3,6 +3,7 @@ from __future__ import annotations
 import math
 
 import numpy as np
+import pandas as pd
 
 import optimize_b3_pine as opt
 
@@ -66,6 +67,26 @@ def _indicator_for_ticker(frame, gap_period: int, signal_period: int, momentum_p
     return state, momentum, vol_valid
 
 
+def weekly_schedule_reference(master_dates: pd.DatetimeIndex, start: str):
+    """Rebuild weekly decision/execution dates without primary-engine mappings."""
+    master = pd.DatetimeIndex(master_dates)
+    if len(master) < 2:
+        raise RuntimeError("reference engine: calendario insuficiente")
+    iso = master.isocalendar()
+    keys = list(zip(iso["year"].astype(int), iso["week"].astype(int)))
+    first_positions = []
+    previous = None
+    for i, key in enumerate(keys):
+        if key != previous:
+            first_positions.append(i)
+            previous = key
+    start_ts = pd.Timestamp(start)
+    exec_positions = [i for i in first_positions if master[i] >= start_ts and i > 0]
+    execution_dates = pd.DatetimeIndex([master[i] for i in exec_positions])
+    decision_dates = pd.DatetimeIndex([master[i - 1] for i in exec_positions])
+    return execution_dates, decision_dates
+
+
 def build_weekly_inputs(
     market: opt.MarketData,
     gap_period: int,
@@ -73,17 +94,19 @@ def build_weekly_inputs(
     momentum_period: int,
     vol_period: int,
 ):
-    weeks = len(market.execution_dates)
+    execution_dates, decision_dates = weekly_schedule_reference(market.master_dates, market.start)
+    weeks = len(execution_dates)
     assets = len(market.tickers)
     gap_state = np.zeros((weeks, assets), dtype=bool)
     momentum = np.full((weeks, assets), np.nan, dtype=float)
     vol_valid = np.zeros((weeks, assets), dtype=bool)
 
     for ti, ticker in enumerate(market.tickers):
+        frame = market.frames[ticker]
         state, mom, vol = _indicator_for_ticker(
-            market.frames[ticker], gap_period, signal_period, momentum_period, vol_period
+            frame, gap_period, signal_period, momentum_period, vol_period
         )
-        didx = market.decision_index[ti]
+        didx = pd.Index(frame["date"]).get_indexer(decision_dates)
         for w, idx in enumerate(didx):
             if idx < 0:
                 continue
@@ -102,7 +125,7 @@ def build_weekly_inputs(
                 best = ti
                 best_score = score
         targets[w] = best
-    return gap_state, momentum, vol_valid, targets
+    return gap_state, momentum, vol_valid, targets, execution_dates, decision_dates
 
 
 def _buy_cost(raw: float, qty: int, fee: float, base: float, extra: float) -> float:
@@ -123,6 +146,20 @@ def affordable_qty_reference(cash: float, raw: float, fee: float, base: float, e
     return q
 
 
+def _open_on(frame: pd.DataFrame, day: pd.Timestamp) -> float:
+    idx = pd.Index(frame["date"]).get_indexer([pd.Timestamp(day)])[0]
+    if idx < 0:
+        return float("nan")
+    return float(frame.iloc[idx]["open"])
+
+
+def _final_close_reference(frame: pd.DataFrame, end: str) -> float:
+    prior = frame[frame["date"] <= pd.Timestamp(end)]
+    if prior.empty:
+        return float("nan")
+    return float(prior.iloc[-1]["close"])
+
+
 def simulate_reference(
     market: opt.MarketData,
     gap_period: int,
@@ -135,7 +172,7 @@ def simulate_reference(
     slippage_bps: float,
     odd_lot_extra_bps: float,
 ):
-    gap_state, momentum, vol_valid, base_targets = build_weekly_inputs(
+    gap_state, momentum, vol_valid, base_targets, execution_dates, decision_dates = build_weekly_inputs(
         market, gap_period, signal_period, momentum_period, vol_period
     )
     fee = fee_bps / 10000.0
@@ -152,6 +189,7 @@ def simulate_reference(
 
     for w, proposed in enumerate(base_targets):
         target = int(proposed)
+        execution_day = execution_dates[w]
         if holding >= 0 and target >= 0 and holding != target:
             incumbent_score = float(momentum[w, holding])
             target_score = float(momentum[w, target])
@@ -170,7 +208,7 @@ def simulate_reference(
         projected = cash
         valid = True
         if holding >= 0:
-            raw_sell = float(market.exec_open[w, holding])
+            raw_sell = _open_on(market.frames[market.tickers[holding]], execution_day)
             if not math.isfinite(raw_sell) or raw_sell <= 0.0:
                 valid = False
             else:
@@ -179,7 +217,7 @@ def simulate_reference(
                 gross = raw_sell * shares - slip
                 projected += gross - gross * fee
         if target >= 0:
-            raw_buy = float(market.exec_open[w, target])
+            raw_buy = _open_on(market.frames[market.tickers[target]], execution_day)
             if not math.isfinite(raw_buy) or raw_buy <= 0.0:
                 valid = False
             elif affordable_qty_reference(projected, raw_buy, fee, base, extra) <= 0:
@@ -189,7 +227,7 @@ def simulate_reference(
             continue
 
         if holding >= 0:
-            raw_sell = float(market.exec_open[w, holding])
+            raw_sell = _open_on(market.frames[market.tickers[holding]], execution_day)
             odd = shares % 100
             slip = raw_sell * (base * shares + extra * odd)
             gross = raw_sell * shares - slip
@@ -202,7 +240,7 @@ def simulate_reference(
             trades += 1
 
         if target >= 0:
-            raw_buy = float(market.exec_open[w, target])
+            raw_buy = _open_on(market.frames[market.tickers[target]], execution_day)
             qty = affordable_qty_reference(cash, raw_buy, fee, base, extra)
             odd = qty % 100
             gross = raw_buy * ((1.0 + base) * qty + extra * odd)
@@ -220,7 +258,7 @@ def simulate_reference(
 
     final_equity = cash
     if holding >= 0:
-        price = float(market.final_close[holding])
+        price = _final_close_reference(market.frames[market.tickers[holding]], market.end)
         if not math.isfinite(price) or price <= 0.0:
             raise RuntimeError("reference engine sem preco final valido")
         final_equity += shares * price
@@ -240,4 +278,6 @@ def simulate_reference(
         "gap_state": gap_state,
         "momentum": momentum,
         "vol_valid": vol_valid,
+        "execution_dates": execution_dates,
+        "decision_dates": decision_dates,
     }
