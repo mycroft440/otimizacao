@@ -17,6 +17,20 @@ def parse_args():
     return p.parse_args()
 
 
+def load_master_sessions(data_root: Path, ticker_dates: dict[str, pd.DatetimeIndex]):
+    calendar_path = data_root / "data/calendars/b3_sessions.csv"
+    if calendar_path.exists():
+        frame = pd.read_csv(calendar_path, usecols=["date"])
+        dates = pd.DatetimeIndex(pd.to_datetime(frame["date"].astype(str).str[:10], errors="raise"))
+        if dates.empty or dates.has_duplicates or not dates.is_monotonic_increasing:
+            raise SystemExit("calendario B3 invalido para auditoria de stale price")
+        return dates, "B3_COTAHIST_ANNUAL_ARCHIVES"
+    sessions = set()
+    for dates in ticker_dates.values():
+        sessions.update(dates.tolist())
+    return pd.DatetimeIndex(sorted(sessions)), "OBSERVED_UNION_FALLBACK"
+
+
 def main():
     args = parse_args()
     if args.warning_sessions < 0:
@@ -32,7 +46,6 @@ def main():
         (args.data_root / "data/universes/fixed_40_2018.json").read_text(encoding="utf-8")
     )
     tickers = [str(x).upper() for x in universe["tickers"]]
-    sessions = set()
     ticker_dates = {}
     for ticker in tickers:
         path = args.data_root / "data/candles" / f"{ticker.lower()}_1d.csv"
@@ -43,8 +56,8 @@ def main():
             .sort_values()
         )
         ticker_dates[ticker] = dates
-        sessions.update(dates.tolist())
-    master = pd.DatetimeIndex(sorted(sessions))
+
+    master, calendar_source = load_master_sessions(args.data_root, ticker_dates)
     master_pos = {pd.Timestamp(day): i for i, day in enumerate(master)}
 
     warnings = []
@@ -97,15 +110,16 @@ def main():
 
     payload = {
         "status": "PASS",
-        "schema_version": 2,
+        "schema_version": 3,
+        "calendar_source": calendar_source,
         "warning_threshold_master_sessions": args.warning_sessions,
         "max_stale_master_sessions_while_invested": max_stale,
         "terminal_position_price_age": terminal,
         "warning_count": len(warnings),
         "warnings": warnings[:100],
         "method_note": (
-            "master sessions are the union of observed snapshot sessions; warnings are diagnostic, "
-            "not proof of delisting/suspension cause"
+            "stale sessions use the official B3 COTAHIST session calendar when available; "
+            "warnings are diagnostic, not proof of delisting/suspension cause"
         ),
     }
     args.output.parent.mkdir(parents=True, exist_ok=True)
@@ -114,6 +128,7 @@ def main():
         json.dumps(
             {
                 "status": payload["status"],
+                "calendar_source": calendar_source,
                 "max_stale_master_sessions_while_invested": max_stale,
                 "terminal_holding": terminal_holding,
                 "warning_count": len(warnings),
