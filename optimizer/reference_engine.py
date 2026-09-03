@@ -8,28 +8,73 @@ import pandas as pd
 import optimize_b3_pine as opt
 
 
+def _rolling_sum_prefix_reference(values: np.ndarray, window: int) -> np.ndarray:
+    """Independent scalar prefix implementation of the float64 rolling contract.
+
+    The production engine uses a float64 prefix/cumsum and strict comparisons in
+    the subsequent direction state. Re-summing each window independently is
+    mathematically equivalent but not bit-equivalent: different rounding can turn
+    a flat SMA into a tiny positive/negative move and change a discrete signal.
+    This reference implementation deliberately rebuilds the same *numeric
+    contract* with an explicit scalar prefix loop without calling production
+    rolling helpers.
+    """
+    data = np.asarray(values, dtype=np.float64)
+    out = np.full(data.shape, np.nan, dtype=np.float64)
+    if window <= 0 or len(data) < window:
+        return out
+    prefix = np.empty(len(data) + 1, dtype=np.float64)
+    prefix[0] = np.float64(0.0)
+    for i, value in enumerate(data):
+        prefix[i + 1] = np.float64(prefix[i] + value)
+    for i in range(window - 1, len(data)):
+        out[i] = np.float64(prefix[i + 1] - prefix[i + 1 - window])
+    return out
+
+
+def _rolling_mean_contiguous_reference(
+    values: np.ndarray, window: int, valid_from: int
+) -> np.ndarray:
+    """Independent float64 prefix SMA for the contiguous valid ratio segment."""
+    data = np.asarray(values, dtype=np.float64)
+    out = np.full(data.shape, np.nan, dtype=np.float64)
+    if window <= 0 or valid_from >= len(data):
+        return out
+    segment = data[valid_from:]
+    if len(segment) < window:
+        return out
+    prefix = np.empty(len(segment) + 1, dtype=np.float64)
+    prefix[0] = np.float64(0.0)
+    for i, value in enumerate(segment):
+        prefix[i + 1] = np.float64(prefix[i] + value)
+    for j in range(window - 1, len(segment)):
+        total = np.float64(prefix[j + 1] - prefix[j + 1 - window])
+        out[valid_from + j] = np.float64(total / window)
+    return out
+
+
 def _indicator_for_ticker(frame, gap_period: int, signal_period: int, momentum_period: int, vol_period: int):
-    opens = frame["open"].to_numpy(dtype=float)
-    closes = frame["close"].to_numpy(dtype=float)
+    opens = frame["open"].to_numpy(dtype=np.float64)
+    closes = frame["close"].to_numpy(dtype=np.float64)
     n = len(closes)
 
-    gaps = np.zeros(n, dtype=float)
+    gaps = np.zeros(n, dtype=np.float64)
     for i in range(1, n):
-        gaps[i] = opens[i] - closes[i - 1]
+        gaps[i] = np.float64(opens[i] - closes[i - 1])
 
-    ratio = np.full(n, np.nan, dtype=float)
+    positive = np.maximum(gaps, np.float64(0.0))
+    negative = np.maximum(-gaps, np.float64(0.0))
+    pos_sum = _rolling_sum_prefix_reference(positive, gap_period)
+    neg_sum = _rolling_sum_prefix_reference(negative, gap_period)
+    ratio = np.full(n, np.nan, dtype=np.float64)
     for i in range(gap_period - 1, n):
-        window = gaps[i - gap_period + 1 : i + 1]
-        pos = float(np.maximum(window, 0.0).sum())
-        neg = float(np.maximum(-window, 0.0).sum())
-        ratio[i] = 1.0 if neg == 0.0 else 100.0 * pos / neg
+        pos = float(pos_sum[i])
+        neg = float(neg_sum[i])
+        if not math.isfinite(pos) or not math.isfinite(neg):
+            continue
+        ratio[i] = np.float64(1.0 if neg == 0.0 else 100.0 * pos / neg)
 
-    signal = np.full(n, np.nan, dtype=float)
-    first_signal = gap_period - 1 + signal_period - 1
-    for i in range(first_signal, n):
-        values = ratio[i - signal_period + 1 : i + 1]
-        if np.all(np.isfinite(values)):
-            signal[i] = float(values.mean())
+    signal = _rolling_mean_contiguous_reference(ratio, signal_period, gap_period - 1)
 
     state = np.zeros(n, dtype=bool)
     valid = np.flatnonzero(np.isfinite(signal))
