@@ -5,7 +5,6 @@ import argparse
 import json
 from pathlib import Path
 
-import numpy as np
 import pandas as pd
 
 
@@ -20,8 +19,15 @@ def parse_args():
 
 def main():
     args = parse_args()
+    if args.warning_sessions < 0:
+        raise SystemExit("warning-sessions precisa ser >= 0")
     curve = pd.read_csv(args.curve)
+    if not {"date", "holding"}.issubset(curve.columns):
+        raise SystemExit("curve precisa conter date,holding")
     curve["date"] = pd.to_datetime(curve["date"], errors="raise")
+    if curve.empty:
+        raise SystemExit("curve vazia")
+
     universe = json.loads(
         (args.data_root / "data/universes/fixed_40_2018.json").read_text(encoding="utf-8")
     )
@@ -31,19 +37,28 @@ def main():
     for ticker in tickers:
         path = args.data_root / "data/candles" / f"{ticker.lower()}_1d.csv"
         frame = pd.read_csv(path, usecols=["date"])
-        dates = pd.DatetimeIndex(pd.to_datetime(frame["date"].astype(str).str[:10], errors="raise").drop_duplicates().sort_values())
+        dates = pd.DatetimeIndex(
+            pd.to_datetime(frame["date"].astype(str).str[:10], errors="raise")
+            .drop_duplicates()
+            .sort_values()
+        )
         ticker_dates[ticker] = dates
         sessions.update(dates.tolist())
     master = pd.DatetimeIndex(sorted(sessions))
     master_pos = {pd.Timestamp(day): i for i, day in enumerate(master)}
 
-    worst = []
+    warnings = []
     max_stale = 0
-    terminal = None
+    last_invested_item = None
+    terminal_row = curve.iloc[-1]
+    terminal_holding = str(terminal_row["holding"]).upper()
+
     for row in curve.itertuples(index=False):
         holding = str(row.holding).upper()
         if holding == "CASH":
             continue
+        if holding not in ticker_dates:
+            raise SystemExit(f"holding fora do universo: {holding}")
         day = pd.Timestamp(row.date)
         dates = ticker_dates[holding]
         idx = dates.searchsorted(day, side="right") - 1
@@ -64,26 +79,48 @@ def main():
             "stale_master_sessions": stale,
         }
         if stale is None or stale > args.warning_sessions:
-            worst.append(item)
-        terminal = item
+            warnings.append(item)
+        last_invested_item = item
+
+    if terminal_holding == "CASH":
+        terminal = {
+            "date": pd.Timestamp(terminal_row["date"]).date().isoformat(),
+            "holding": "CASH",
+            "last_trade_date": None,
+            "stale_master_sessions": 0,
+            "note": "terminal portfolio is cash; no terminal security price is used",
+        }
+    else:
+        terminal = last_invested_item
+        if terminal is None or terminal.get("holding") != terminal_holding:
+            raise SystemExit("nao foi possivel reconciliar a posicao terminal da curva")
 
     payload = {
         "status": "PASS",
-        "schema_version": 1,
+        "schema_version": 2,
         "warning_threshold_master_sessions": args.warning_sessions,
         "max_stale_master_sessions_while_invested": max_stale,
         "terminal_position_price_age": terminal,
-        "warning_count": len(worst),
-        "warnings": worst[:100],
-        "method_note": "master sessions are the union of observed snapshot sessions; warnings are diagnostic, not proof of delisting/suspension cause",
+        "warning_count": len(warnings),
+        "warnings": warnings[:100],
+        "method_note": (
+            "master sessions are the union of observed snapshot sessions; warnings are diagnostic, "
+            "not proof of delisting/suspension cause"
+        ),
     }
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-    print(json.dumps({
-        "status": payload["status"],
-        "max_stale_master_sessions_while_invested": max_stale,
-        "warning_count": len(worst),
-    }, ensure_ascii=False))
+    print(
+        json.dumps(
+            {
+                "status": payload["status"],
+                "max_stale_master_sessions_while_invested": max_stale,
+                "terminal_holding": terminal_holding,
+                "warning_count": len(warnings),
+            },
+            ensure_ascii=False,
+        )
+    )
 
 
 if __name__ == "__main__":
