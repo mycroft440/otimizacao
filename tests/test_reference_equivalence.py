@@ -90,6 +90,39 @@ class ReferenceEngineSyntheticTests(unittest.TestCase):
             self.assertEqual(int(fast["trades"][0]), int(slow["trades"]))
             self.assertEqual(int(fast["skipped"][0]), int(slow["skipped"]))
 
+    def test_gap_state_uses_same_float64_accumulation_contract(self):
+        """Regression for ulp-level SMA differences found on the real B3 snapshot."""
+        rng = np.random.default_rng(20260903)
+        n = 3000
+        raw_gaps = rng.choice([-1.0, 1.0], n) * 10.0 ** rng.uniform(-8.0, 3.0, n)
+        close = np.full(n, 1_000_000.0, dtype=np.float64)
+        open_ = close.copy()
+        open_[1:] = close[:-1] + raw_gaps[1:]
+        frame = pd.DataFrame(
+            {
+                "date": pd.bdate_range("2010-01-04", periods=n),
+                "open": open_,
+                "close": close,
+            }
+        )
+
+        gaps = np.zeros(n, dtype=np.float64)
+        gaps[1:] = open_[1:] - close[:-1]
+        positive = np.maximum(gaps, 0.0)
+        negative = np.maximum(-gaps, 0.0)
+        pos_sum = opt.rolling_sum(positive, 5)
+        neg_sum = opt.rolling_sum(negative, 5)
+        ratio = np.full(n, np.nan, dtype=np.float64)
+        valid = np.isfinite(pos_sum) & np.isfinite(neg_sum)
+        ratio[valid & (neg_sum == 0.0)] = 1.0
+        nz = valid & (neg_sum != 0.0)
+        ratio[nz] = 100.0 * pos_sum[nz] / neg_sum[nz]
+        signal = opt.rolling_mean_contiguous(ratio, 2, 4)
+        expected = opt.persistent_direction_state(signal)
+
+        actual, _momentum, _vol = ref._indicator_for_ticker(frame, 5, 2, 5, 21)
+        self.assertTrue(np.array_equal(expected, actual))
+
 
 if __name__ == "__main__":
     unittest.main()
