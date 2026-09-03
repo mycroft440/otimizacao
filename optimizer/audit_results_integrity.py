@@ -40,6 +40,17 @@ def _first_meta(results_dir: Path) -> dict[str, object]:
     return json.loads(metas[0].read_text(encoding="utf-8"))
 
 
+def _snapshot_meta_from_universe(universe_path: Path) -> dict[str, object]:
+    try:
+        root = universe_path.parents[2]
+    except IndexError:
+        return {}
+    path = root / "SNAPSHOT_META.json"
+    if not path.exists():
+        return {}
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
 def main():
     args = parse_args()
     if not math.isfinite(args.initial_cash) or args.initial_cash <= 0:
@@ -71,7 +82,7 @@ def main():
         args.output.parent.mkdir(parents=True, exist_ok=True)
         payload = {
             "status": "FAIL",
-            "schema_version": 2,
+            "schema_version": 3,
             "rows": 0,
             "initial_cash": args.initial_cash,
             "shard_set": shard_set,
@@ -80,6 +91,33 @@ def main():
         }
         args.output.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
         raise SystemExit("RESULT INTEGRITY AUDIT FAIL: SHARD SET")
+
+    provenance_failures: list[str] = []
+    contract = dict(shard_set.get("canonical_contract") or {})
+    current_run_id = os.environ.get("GITHUB_RUN_ID", "")
+    current_sha = os.environ.get("GITHUB_SHA", "")
+    current_repo = os.environ.get("GITHUB_REPOSITORY", "")
+    if current_run_id and str(contract.get("github_run_id", "")) != current_run_id:
+        provenance_failures.append(
+            f"github_run_id dos shards={contract.get('github_run_id')} atual={current_run_id}"
+        )
+    if current_sha and str(contract.get("optimizer_sha", "")) != current_sha:
+        provenance_failures.append(
+            f"optimizer_sha dos shards={contract.get('optimizer_sha')} atual={current_sha}"
+        )
+    if current_repo and str(contract.get("github_repository", "")) != current_repo:
+        provenance_failures.append(
+            f"github_repository dos shards={contract.get('github_repository')} atual={current_repo}"
+        )
+
+    snapshot_meta = _snapshot_meta_from_universe(args.universe)
+    if snapshot_meta:
+        if str(contract.get("snapshot_upstream_sha", "")) != str(snapshot_meta.get("upstream_sha", "")):
+            provenance_failures.append("snapshot_upstream_sha dos shards diverge do snapshot congelado")
+        if str(contract.get("snapshot_universe_sha256", "")) != str(snapshot_meta.get("universe_sha256", "")):
+            provenance_failures.append("snapshot_universe_sha256 dos shards diverge do snapshot congelado")
+        if str(contract.get("snapshot_requested_end", "")) != str(snapshot_meta.get("requested_end", "")):
+            provenance_failures.append("snapshot_requested_end dos shards diverge do snapshot congelado")
 
     files = sorted(args.results_dir.rglob("shard_*.csv"))
     if not files:
@@ -103,7 +141,7 @@ def main():
     if missing:
         raise SystemExit(f"colunas ausentes: {missing}")
 
-    failures = []
+    failures = list(provenance_failures)
     numeric_nonnegative = [
         "final_equity",
         "trades",
@@ -149,7 +187,7 @@ def main():
 
     payload = {
         "status": "PASS" if not failures else "FAIL",
-        "schema_version": 2,
+        "schema_version": 3,
         "rows": int(len(frame)),
         "initial_cash": args.initial_cash,
         "expected_costs": {
@@ -157,9 +195,15 @@ def main():
             "slippage_bps": float(slippage_bps),
             "odd_lot_extra_bps": float(odd_lot_extra_bps),
         },
+        "current_workflow_identity": {
+            "github_run_id": current_run_id or None,
+            "optimizer_sha": current_sha or None,
+            "github_repository": current_repo or None,
+        },
         "shard_set": shard_set,
         "checks": {
             "shard_metadata_reconciles": shard_set["status"] == "PASS",
+            "shards_belong_to_current_run": not provenance_failures,
             "required_schema": not missing,
             "finite_financial_fields": not any("NaN/inf" in x for x in failures),
             "nonnegative_accounting_fields": not any("negativo" in x for x in failures),
