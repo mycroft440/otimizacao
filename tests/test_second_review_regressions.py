@@ -7,12 +7,14 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 
 import pandas as pd
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "optimizer"))
 import metrics  # noqa: E402
+import optimize_b3_pine_fast as fast  # noqa: E402
 
 
 class CompleteYearTests(unittest.TestCase):
@@ -72,6 +74,52 @@ class StalePriceCashTests(unittest.TestCase):
             payload = json.loads(output.read_text(encoding="utf-8"))
             self.assertEqual(payload["terminal_position_price_age"]["holding"], "CASH")
             self.assertEqual(payload["terminal_position_price_age"]["stale_master_sessions"], 0)
+
+
+class EmptyShardTests(unittest.TestCase):
+    def test_empty_shard_has_full_schema_hash_and_actual_snapshot_end(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            data_root = root / "snapshot"
+            data_root.mkdir()
+            (data_root / "SNAPSHOT_META.json").write_text(
+                json.dumps(
+                    {
+                        "upstream_sha": "upstream",
+                        "universe_sha256": "universe",
+                        "requested_end": "2020-12-27",
+                        "actual_master_end": "2020-12-23",
+                    }
+                ),
+                encoding="utf-8",
+            )
+            output = root / "shard_19.csv"
+            args = SimpleNamespace(
+                output=output,
+                data_root=data_root,
+                shard_id=19,
+                shards=20,
+                signal_min=2,
+                signal_max=60,
+                momentum_min=5,
+                momentum_max=252,
+                vol_period=21,
+                start="2020-01-02",
+                end="2020-12-27",
+                initial_cash=1000.0,
+                fee_bps=3.25,
+                slippage_bps=10.0,
+                odd_lot_extra_bps=5.0,
+            )
+            fast._write_empty_shard(args)
+            frame = pd.read_csv(output)
+            meta = json.loads(output.with_suffix(".json").read_text(encoding="utf-8"))
+            self.assertTrue(frame.empty)
+            self.assertIn("skipped_executions", frame.columns)
+            self.assertEqual(meta["schema_version"], 2)
+            self.assertEqual(meta["end"], "2020-12-23")
+            self.assertEqual(meta["gap_values"], [])
+            self.assertEqual(meta["csv_sha256"], hashlib.sha256(output.read_bytes()).hexdigest())
 
 
 class ShardSetAuditTests(unittest.TestCase):
