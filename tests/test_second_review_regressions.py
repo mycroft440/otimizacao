@@ -85,8 +85,8 @@ class EmptyShardTests(unittest.TestCase):
             (data_root / "SNAPSHOT_META.json").write_text(
                 json.dumps(
                     {
-                        "upstream_sha": "upstream",
-                        "universe_sha256": "universe",
+                        "upstream_sha": "a" * 40,
+                        "universe_sha256": "b" * 64,
                         "requested_end": "2020-12-27",
                         "actual_master_end": "2020-12-23",
                     }
@@ -123,7 +123,14 @@ class EmptyShardTests(unittest.TestCase):
 
 
 class ShardSetAuditTests(unittest.TestCase):
-    def _write_shard(self, directory: Path, shard: int, fee: float = 3.25, run_id: str = "123"):
+    def _write_shard(
+        self,
+        directory: Path,
+        shard: int,
+        fee: float = 3.25,
+        run_id: str = "123",
+        optimizer_sha: str | None = None,
+    ):
         csv = directory / f"shard_{shard}.csv"
         pd.DataFrame(
             {
@@ -165,10 +172,10 @@ class ShardSetAuditTests(unittest.TestCase):
             "momentum_dtype": "float64",
             "csv_sha256": csv_hash,
             "github_run_id": run_id,
-            "optimizer_sha": "abc123",
+            "optimizer_sha": optimizer_sha or "a" * 40,
             "github_repository": "mycroft440/otimizacao",
-            "snapshot_upstream_sha": "upstream123",
-            "snapshot_universe_sha256": "universe123",
+            "snapshot_upstream_sha": "b" * 40,
+            "snapshot_universe_sha256": "c" * 64,
             "snapshot_requested_end": "2020-12-30",
         }
         csv.with_suffix(".json").write_text(json.dumps(meta), encoding="utf-8")
@@ -229,6 +236,14 @@ class ShardSetAuditTests(unittest.TestCase):
             self._write_shard(directory, 1)
             with (directory / "shard_1.csv").open("a", encoding="utf-8") as handle:
                 handle.write("\n")
+            result = self._run(directory, directory / "audit.json")
+            self.assertNotEqual(result.returncode, 0)
+
+    def test_invalid_or_empty_optimizer_sha_fails_closed(self):
+        with tempfile.TemporaryDirectory() as td:
+            directory = Path(td)
+            self._write_shard(directory, 0, optimizer_sha="abc")
+            self._write_shard(directory, 1, optimizer_sha="abc")
             result = self._run(directory, directory / "audit.json")
             self.assertNotEqual(result.returncode, 0)
 
