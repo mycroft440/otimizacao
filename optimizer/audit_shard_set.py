@@ -11,6 +11,8 @@ from pathlib import Path
 import pandas as pd
 
 SHARD_RE = re.compile(r"^shard_(\d+)$")
+SHA40_RE = re.compile(r"^[0-9a-f]{40}$")
+SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 
 
 def parse_args():
@@ -41,6 +43,14 @@ def close(a: object, b: float) -> bool:
     return math.isfinite(value) and math.isclose(value, float(b), rel_tol=0.0, abs_tol=1e-12)
 
 
+def _valid_iso_date(value: object) -> bool:
+    try:
+        pd.Timestamp(str(value))
+        return bool(str(value))
+    except Exception:
+        return False
+
+
 def audit_shard_set(
     results_dir: Path,
     *,
@@ -49,6 +59,7 @@ def audit_shard_set(
     fee_bps: float,
     slippage_bps: float,
     odd_lot_extra_bps: float,
+    expected_provenance: dict[str, str] | None = None,
 ) -> dict[str, object]:
     if expected_shards <= 0:
         raise ValueError("expected_shards precisa ser > 0")
@@ -100,7 +111,7 @@ def audit_shard_set(
             failures.append(f"shard {shard_id}: coluna shard do CSV diverge")
 
         actual_csv_hash = sha256(csv_path)
-        if str(meta.get("csv_sha256", "")) != actual_csv_hash:
+        if str(meta.get("csv_sha256", "")).lower() != actual_csv_hash:
             failures.append(f"shard {shard_id}: csv_sha256 nao confere")
 
         if "gap_period" in frame.columns:
@@ -114,6 +125,8 @@ def audit_shard_set(
                 )
         else:
             failures.append(f"shard {shard_id}: gap_period ausente")
+            actual_gaps = []
+            expected_gaps = []
 
         for key, expected in (
             ("initial_cash", initial_cash),
@@ -123,6 +136,74 @@ def audit_shard_set(
         ):
             if not close(meta.get(key), expected):
                 failures.append(f"shard {shard_id}: {key}={meta.get(key)} esperado={expected}")
+
+        try:
+            signal_min = int(meta.get("signal_min"))
+            signal_max = int(meta.get("signal_max"))
+            momentum_min = int(meta.get("momentum_min"))
+            momentum_max = int(meta.get("momentum_max"))
+            vol_period = int(meta.get("vol_period"))
+        except Exception:
+            failures.append(f"shard {shard_id}: ranges de metadata invalidos")
+            signal_min = signal_max = momentum_min = momentum_max = vol_period = -1
+
+        expected_rows = max(0, len(expected_gaps)) * max(0, signal_max - signal_min + 1) * max(
+            0, momentum_max - momentum_min + 1
+        )
+        if int(meta.get("rows", -1)) != expected_rows:
+            failures.append(
+                f"shard {shard_id}: rows nao reconciliam com ranges: "
+                f"metadata={meta.get('rows')} expected={expected_rows}"
+            )
+
+        if not frame.empty:
+            checks = {
+                "signal_min": int(pd.to_numeric(frame["signal_period"], errors="raise").min()) == signal_min,
+                "signal_max": int(pd.to_numeric(frame["signal_period"], errors="raise").max()) == signal_max,
+                "momentum_min": int(pd.to_numeric(frame["momentum_period"], errors="raise").min()) == momentum_min,
+                "momentum_max": int(pd.to_numeric(frame["momentum_period"], errors="raise").max()) == momentum_max,
+                "vol_period": set(pd.to_numeric(frame["vol_period"], errors="raise").astype(int)) == {vol_period},
+                "start": set(frame["start"].astype(str)) == {str(meta.get("start"))},
+                "end": set(frame["end"].astype(str)) == {str(meta.get("end"))},
+            }
+            bad = [name for name, ok in checks.items() if not ok]
+            if bad:
+                failures.append(f"shard {shard_id}: CSV diverge da metadata em {bad}")
+
+        run_id = str(meta.get("github_run_id") or "")
+        optimizer_sha = str(meta.get("optimizer_sha") or "").lower()
+        repository = str(meta.get("github_repository") or "")
+        upstream_sha = str(meta.get("snapshot_upstream_sha") or "").lower()
+        universe_sha = str(meta.get("snapshot_universe_sha256") or "").lower()
+        requested_end = str(meta.get("snapshot_requested_end") or "")
+        if not run_id.isdigit():
+            failures.append(f"shard {shard_id}: github_run_id invalido/vazio")
+        if not SHA40_RE.fullmatch(optimizer_sha):
+            failures.append(f"shard {shard_id}: optimizer_sha invalido/vazio")
+        if repository != "mycroft440/otimizacao":
+            failures.append(f"shard {shard_id}: github_repository inesperado={repository!r}")
+        if not SHA40_RE.fullmatch(upstream_sha):
+            failures.append(f"shard {shard_id}: snapshot_upstream_sha invalido/vazio")
+        if not SHA256_RE.fullmatch(universe_sha):
+            failures.append(f"shard {shard_id}: snapshot_universe_sha256 invalido/vazio")
+        if not _valid_iso_date(requested_end):
+            failures.append(f"shard {shard_id}: snapshot_requested_end invalido/vazio")
+
+        provenance = {
+            "github_run_id": run_id,
+            "optimizer_sha": optimizer_sha,
+            "github_repository": repository,
+            "snapshot_upstream_sha": upstream_sha,
+            "snapshot_universe_sha256": universe_sha,
+            "snapshot_requested_end": requested_end,
+        }
+        if expected_provenance is not None:
+            for key, expected in expected_provenance.items():
+                if expected and provenance.get(key) != expected:
+                    failures.append(
+                        f"shard {shard_id}: proveniencia {key}={provenance.get(key)!r} "
+                        f"esperado={expected!r}"
+                    )
 
         contract = {
             "shards": meta.get("shards"),
@@ -139,12 +220,7 @@ def audit_shard_set(
             "odd_lot_extra_bps": meta.get("odd_lot_extra_bps"),
             "portfolio_policy": meta.get("portfolio_policy"),
             "momentum_dtype": meta.get("momentum_dtype"),
-            "github_run_id": meta.get("github_run_id"),
-            "optimizer_sha": meta.get("optimizer_sha"),
-            "github_repository": meta.get("github_repository"),
-            "snapshot_upstream_sha": meta.get("snapshot_upstream_sha"),
-            "snapshot_universe_sha256": meta.get("snapshot_universe_sha256"),
-            "snapshot_requested_end": meta.get("snapshot_requested_end"),
+            **provenance,
         }
         if canonical_contract is None:
             canonical_contract = contract
@@ -171,9 +247,10 @@ def audit_shard_set(
 
     return {
         "status": "PASS" if not failures else "FAIL",
-        "schema_version": 2,
+        "schema_version": 3,
         "expected_shards": expected_shards,
         "observed_shard_ids": sorted(seen_ids),
+        "expected_provenance": expected_provenance,
         "canonical_contract": canonical_contract,
         "files": file_reports,
         "failures": failures,
