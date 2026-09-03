@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Valida no holdout combinações escolhidas exclusivamente no período de treino."""
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import math
 import sys
@@ -11,33 +11,78 @@ from pathlib import Path
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import config
 import optimize_b3_pine as opt  # noqa: E402
 import reduce_results as red  # noqa: E402
 
 
-def parse_args() -> argparse.Namespace:
+def parse_args():
     p = argparse.ArgumentParser()
     p.add_argument("--data-root", required=True, type=Path)
     p.add_argument("--training-top", required=True, type=Path)
+    p.add_argument("--training-manifest", required=True, type=Path)
     p.add_argument("--start", required=True)
     p.add_argument("--end", default="")
     p.add_argument("--top", type=int, default=3)
     p.add_argument("--output-dir", required=True, type=Path)
-    p.add_argument("--initial-cash", type=float, default=1000.0)
-    p.add_argument("--fee-bps", type=float, default=3.25)
-    p.add_argument("--slippage-bps", type=float, default=10.0)
-    p.add_argument("--odd-lot-extra-bps", type=float, default=5.0)
+    p.add_argument("--initial-cash", type=float, default=config.DEFAULT_INITIAL_CASH)
+    p.add_argument("--fee-bps", type=float, default=config.DEFAULT_FEE_BPS)
+    p.add_argument("--slippage-bps", type=float, default=config.DEFAULT_SLIPPAGE_BPS)
+    p.add_argument("--odd-lot-extra-bps", type=float, default=config.DEFAULT_ODD_LOT_EXTRA_BPS)
     return p.parse_args()
+
+
+def sha256_file(path: Path) -> str:
+    h = hashlib.sha256()
+    with path.open("rb") as handle:
+        for block in iter(lambda: handle.read(1024 * 1024), b""):
+            h.update(block)
+    return h.hexdigest()
 
 
 def pct(value: float) -> str:
     return "N/D" if not math.isfinite(value) else f"{value * 100:.2f}%"
 
 
-def main() -> None:
+def verify_training_source(top_path: Path, manifest_path: Path, oos_start: str) -> dict[str, object]:
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    execution = manifest.get("execution") or {}
+    training = manifest.get("training") or {}
+    training_start = str(training.get("start") or execution.get("start") or "")
+    training_end = str(training.get("end") or execution.get("end") or "")
+    if not training_start or not training_end:
+        raise SystemExit("training manifest sem start/end verificaveis")
+    if pd.Timestamp(training_end) >= pd.Timestamp(oos_start):
+        raise SystemExit(
+            f"OOS LEAKAGE: training_end={training_end} precisa ser anterior a oos_start={oos_start}"
+        )
+
+    selection = manifest.get("selection_provenance") or {}
+    if selection.get("mode") != "training_only":
+        raise SystemExit("training manifest nao prova selection_provenance.mode=training_only")
+    expected_hash = str(selection.get("top_100_sha256") or "")
+    if not expected_hash:
+        raise SystemExit("training manifest sem hash do top_100 usado para selecionar parametros")
+    actual_hash = sha256_file(top_path)
+    if actual_hash != expected_hash:
+        raise SystemExit(
+            f"training-top hash divergente: esperado={expected_hash} atual={actual_hash}"
+        )
+    return {
+        "training_start": training_start,
+        "training_end": training_end,
+        "training_top_sha256": actual_hash,
+        "training_optimizer_sha": manifest.get("optimizer_sha", ""),
+        "training_upstream_sha": manifest.get("upstream_sha", ""),
+    }
+
+
+def main():
     args = parse_args()
     if args.top <= 0:
         raise SystemExit("--top precisa ser positivo")
+    provenance = verify_training_source(args.training_top, args.training_manifest, args.start)
+
     source = pd.read_csv(args.training_top).head(args.top).copy()
     required = {"gap_period", "signal_period", "momentum_period", "vol_period"}
     if len(source) < args.top or not required.issubset(source.columns):
@@ -51,6 +96,14 @@ def main() -> None:
         s = int(row.signal_period)
         m = int(row.momentum_period)
         v = int(row.vol_period)
+        config.validate_run_config(
+            start=args.start, end=market.end,
+            gap_min=g, gap_max=g, signal_min=s, signal_max=s,
+            momentum_min=m, momentum_max=m, vol_period=v,
+            initial_cash=args.initial_cash, fee_bps=args.fee_bps,
+            slippage_bps=args.slippage_bps,
+            odd_lot_extra_bps=args.odd_lot_extra_bps,
+        )
         summary, curve = red.detailed_backtest(
             market, g, s, m, v,
             initial_cash=args.initial_cash,
@@ -60,7 +113,7 @@ def main() -> None:
         )
         summary = dict(summary)
         summary["training_rank"] = rank
-        summary["selection_source"] = "training_only"
+        summary["selection_source"] = "cryptographically_verified_training_only"
         summary["oos_start"] = args.start
         summary["oos_end"] = market.end
         results.append(summary)
@@ -80,7 +133,9 @@ def main() -> None:
 
     payload = {
         "status": "PASS",
-        "selection": "parameters selected only on training period; holdout never used for ranking",
+        "schema_version": 2,
+        "selection": "parameters selected only on cryptographically verified training artifact",
+        **provenance,
         "oos_start": args.start,
         "oos_end": market.end,
         "top": args.top,
@@ -91,10 +146,11 @@ def main() -> None:
     )
 
     lines = [
-        "# Validacao fora da amostra — Top 3 escolhidos no treino",
+        "# Validacao fora da amostra — Top escolhidos somente no treino",
         "",
-        f"Treino usado para escolher parametros: arquivo `{args.training_top.name}`.",
-        f"Holdout: **{args.start} ate {market.end}**. O holdout nao participa do ranking de treino.",
+        f"Treino: **{provenance['training_start']} ate {provenance['training_end']}**.",
+        f"Holdout: **{args.start} ate {market.end}**.",
+        "O arquivo de ranking de treino foi conferido por SHA-256 e o manifest prova selecao training-only.",
         "",
         "| Rank treino | Gap | Signal | Momentum | Retorno OOS | CAGR OOS | Max DD OOS | Capital final |",
         "|---:|---:|---:|---:|---:|---:|---:|---:|",
@@ -107,7 +163,7 @@ def main() -> None:
         )
     lines += [
         "",
-        "Estes resultados sao OOS em relacao a escolha dos parametros. O universo fixo do Pine continua sendo uma limitacao metodologica separada.",
+        "O universo Pine fixo continua sendo uma limitacao metodologica separada e nao e survivorship-safe.",
     ]
     (args.output_dir / "OOS_TOP3.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
     print("\n".join(lines))
