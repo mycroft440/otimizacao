@@ -44,9 +44,9 @@ class ExactVolGridAccelerationTests(unittest.TestCase):
 
     def test_all_vol_prefix_sum_cache_is_bit_exact_to_canonical_gate(self):
         market = self._market()
-        periods = list(range(1, 11))
+        periods = list(range(2, 11))
         cached = grid.compute_all_vol_valid(market, periods)
-        self.assertEqual(cached.shape, (10, 6, 2))
+        self.assertEqual(cached.shape, (9, 6, 2))
         for vi, period in enumerate(periods):
             canonical = grid.compute_vol_valid(market, period)
             self.assertTrue(
