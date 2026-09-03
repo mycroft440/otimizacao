@@ -143,23 +143,7 @@ jobs:
 
       - name: Validar sintaxe e executar testes regressivos
         run: |
-          python -m py_compile \
-            optimizer/config.py \
-            optimizer/metrics.py \
-            optimizer/optimize_b3_pine.py \
-            optimizer/optimize_b3_pine_fast.py \
-            optimizer/reference_engine.py \
-            optimizer/reduce_results.py \
-            optimizer/audit_exhaustive_grid.py \
-            optimizer/audit_results_integrity.py \
-            optimizer/audit_portfolio_management.py \
-            optimizer/audit_fast_precompute.py \
-            optimizer/audit_reference_engine.py \
-            optimizer/audit_snapshot.py \
-            optimizer/audit_warmup.py \
-            optimizer/build_annual_report.py \
-            optimizer/finalize_manifest.py \
-            optimizer/validate_top_oos.py
+          python -m compileall -q optimizer tests
           python -m unittest discover -s tests -v
 
       - name: Resolver corte oficial
@@ -479,6 +463,24 @@ jobs:
           cp pine_snapshot/PORTFOLIO_MANAGEMENT_AUDIT.json final-results/PORTFOLIO_MANAGEMENT_AUDIT.json
           cp pine_snapshot/FAST_PRECOMPUTE_AUDIT.json final-results/FAST_PRECOMPUTE_AUDIT.json
           cp pine_snapshot/REFERENCE_ENGINE_AUDIT.json final-results/REFERENCE_ENGINE_AUDIT.json
+      - name: Recalcular metricas e separar mark-to-market de liquidacao
+        run: |
+          python optimizer/harden_best_report.py \
+            --best final-results/BEST.json --manifest final-results/MANIFEST.json \
+            --curve final-results/BEST_EQUITY_DAILY.csv --summary final-results/OPTIMIZATION_SUMMARY.md \
+            --fee-bps "$FEE_BPS" --slippage-bps "$SLIPPAGE_BPS" \
+            --odd-lot-extra-bps "$ODD_LOT_EXTRA_BPS"
+      - name: Auditar idade dos precos usados na curva vencedora
+        run: |
+          python optimizer/audit_stale_prices.py \
+            --data-root pine_snapshot --curve final-results/BEST_EQUITY_DAILY.csv \
+            --output final-results/STALE_PRICE_AUDIT.json --warning-sessions 5
+      - name: Analisar landscape e robustez local da grade
+        run: |
+          python optimizer/analyze_robustness.py \
+            --results final-results/all_results.csv.gz \
+            --json final-results/ROBUSTNESS_ANALYSIS.json \
+            --md final-results/ROBUSTNESS_ANALYSIS.md --radius 2
       - name: Amarrar manifest ao SHA, runtime e hashes das fontes
         run: |
           python optimizer/finalize_manifest.py \
@@ -504,9 +506,11 @@ jobs:
               'grid_integrity': 'PASS',
               'financial_integrity': 'PASS',
               'independent_reference_engine': 'PASS',
+              'stale_price_diagnostic': 'PASS',
+              'parameter_landscape_robustness_analysis': 'PASS',
               'strategy_validation': 'IN_SAMPLE_ONLY',
               'oos_validation': 'NOT_RUN_IN_THIS_WORKFLOW',
-              'walk_forward_validation': 'NOT_RUN_IN_THIS_WORKFLOW',
+              'walk_forward_validation': 'AVAILABLE_IN_SEPARATE_MANUAL_WORKFLOW',
               'survivorship_safe': False,
               'income_tax_included': False,
               'dividends_jcp_included': False,
@@ -518,6 +522,8 @@ jobs:
           cat final-results/OPTIMIZATION_SUMMARY.md >> "$GITHUB_STEP_SUMMARY"
           echo '' >> "$GITHUB_STEP_SUMMARY"
           cat final-results/ANNUAL_RETURNS.md >> "$GITHUB_STEP_SUMMARY"
+          echo '' >> "$GITHUB_STEP_SUMMARY"
+          cat final-results/ROBUSTNESS_ANALYSIS.md >> "$GITHUB_STEP_SUMMARY"
           echo '' >> "$GITHUB_STEP_SUMMARY"
           echo '## Validation status' >> "$GITHUB_STEP_SUMMARY"
           cat final-results/VALIDATION_STATUS.json >> "$GITHUB_STEP_SUMMARY"
@@ -546,7 +552,8 @@ jobs:
             OPTIMIZATION_SUMMARY.md BEST.json MANIFEST.json EXHAUSTIVE_GRID_AUDIT.json \
             RESULTS_INTEGRITY_AUDIT.json MARKET_SNAPSHOT_META.json WARMUP_AUDIT.json \
             PORTFOLIO_MANAGEMENT_AUDIT.json PORTFOLIO_RECONCILIATION.json \
-            FAST_PRECOMPUTE_AUDIT.json REFERENCE_ENGINE_AUDIT.json VALIDATION_STATUS.json \
+            FAST_PRECOMPUTE_AUDIT.json REFERENCE_ENGINE_AUDIT.json STALE_PRICE_AUDIT.json \
+            ROBUSTNESS_ANALYSIS.json ROBUSTNESS_ANALYSIS.md VALIDATION_STATUS.json \
             ANNUAL_RETURNS.csv ANNUAL_RETURNS.json ANNUAL_RETURNS.md top_100.csv BEST_EQUITY_DAILY.csv
           do
             cp "final-results/$name" reports/latest/
