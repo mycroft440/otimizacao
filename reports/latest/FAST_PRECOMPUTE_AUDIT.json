@@ -1,0 +1,84 @@
+{
+  "status": "PASS",
+  "mode": "bit_exact_precompute_and_portfolio_small_grid",
+  "grid": {
+    "gap": [
+      5,
+      40,
+      80
+    ],
+    "signal": [
+      2,
+      9,
+      20,
+      60
+    ],
+    "momentum": [
+      5,
+      63,
+      123,
+      252
+    ],
+    "vol": 21
+  },
+  "checks": {
+    "pairs": true,
+    "gap_state_bit_exact": true,
+    "momentum_bit_exact": true,
+    "vol_valid_bit_exact": true
+  },
+  "portfolio_checks": [
+    {
+      "momentum": 5,
+      "checks": {
+        "final_equity": true,
+        "cash": true,
+        "shares": true,
+        "holding": true,
+        "trades": true,
+        "skipped": true,
+        "fees": true,
+        "slippage": true
+      }
+    },
+    {
+      "momentum": 63,
+      "checks": {
+        "final_equity": true,
+        "cash": true,
+        "shares": true,
+        "holding": true,
+        "trades": true,
+        "skipped": true,
+        "fees": true,
+        "slippage": true
+      }
+    },
+    {
+      "momentum": 123,
+      "checks": {
+        "final_equity": true,
+        "cash": true,
+        "shares": true,
+        "holding": true,
+        "trades": true,
+        "skipped": true,
+        "fees": true,
+        "slippage": true
+      }
+    },
+    {
+      "momentum": 252,
+      "checks": {
+        "final_equity": true,
+        "cash": true,
+        "shares": true,
+        "holding": true,
+        "trades": true,
+        "skipped": true,
+        "fees": true,
+        "slippage": true
+      }
+    }
+  ]
+}

@@ -1,0 +1,26 @@
+{
+  "status": "PASS",
+  "step": 1,
+  "gap_period": [
+    5,
+    80,
+    1
+  ],
+  "signal_period": [
+    2,
+    60,
+    1
+  ],
+  "momentum_period": [
+    5,
+    252,
+    1
+  ],
+  "vol_period": 21,
+  "expected_combinations": 1112032,
+  "rows": 1112032,
+  "unique_canonical_ids": 1112032,
+  "missing_count": 0,
+  "duplicate_count": 0,
+  "exact_cartesian_grid_once": true
+}

@@ -1,0 +1,12 @@
+{
+  "status": "PASS",
+  "policy": "pine_v17_hold_same_target_no_residual_reinvestment",
+  "checks": {
+    "same_target_no_residual_reinvestment": true,
+    "atomic_switch_sell_then_buy": true,
+    "failed_switch_keeps_previous_portfolio": true,
+    "cash_target_liquidates_position": true,
+    "exact_tie_preserves_eligible_incumbent": true,
+    "float64_ranking_distinguishes_close_scores": true
+  }
+}

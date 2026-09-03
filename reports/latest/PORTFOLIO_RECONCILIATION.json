@@ -1,0 +1,11 @@
+{
+  "status": "PASS",
+  "checks": {
+    "final_equity": true,
+    "fees_paid": true,
+    "slippage_impact": true,
+    "trades": true,
+    "skipped_executions": true,
+    "final_holding": true
+  }
+}
