@@ -10,6 +10,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "optimizer"))
 import config  # noqa: E402
 import optimize_b3_pine as opt  # noqa: E402
+import optimize_b3_pine_fast as fast  # noqa: E402
 
 
 class WorkflowSupplyChainTests(unittest.TestCase):
@@ -27,12 +28,36 @@ class WorkflowSupplyChainTests(unittest.TestCase):
 
 class CanonicalCliDefaultsTests(unittest.TestCase):
     def test_reference_optimizer_uses_canonical_cost_defaults(self):
-        with mock.patch.object(sys, "argv", ["optimize_b3_pine.py", "--data-root", "x", "--output", "y"]):
+        with mock.patch.object(
+            sys,
+            "argv",
+            ["optimize_b3_pine.py", "--data-root", "x", "--output", "y"],
+        ):
             args = opt.parse_args()
         self.assertEqual(args.initial_cash, config.DEFAULT_INITIAL_CASH)
         self.assertEqual(args.fee_bps, config.DEFAULT_FEE_BPS)
         self.assertEqual(args.slippage_bps, config.DEFAULT_SLIPPAGE_BPS)
         self.assertEqual(args.odd_lot_extra_bps, config.DEFAULT_ODD_LOT_EXTRA_BPS)
+
+    def test_fast_optimizer_respects_equals_form_override(self):
+        with mock.patch.object(
+            sys,
+            "argv",
+            [
+                "optimize_b3_pine_fast.py",
+                "--data-root=x",
+                "--output=y",
+                "--fee-bps=4.0",
+                "--slippage-bps=12.5",
+                "--odd-lot-extra-bps=7.5",
+                "--initial-cash=2500",
+            ],
+        ):
+            args = fast._hardened_parse_args()
+        self.assertEqual(args.initial_cash, 2500.0)
+        self.assertEqual(args.fee_bps, 4.0)
+        self.assertEqual(args.slippage_bps, 12.5)
+        self.assertEqual(args.odd_lot_extra_bps, 7.5)
 
 
 if __name__ == "__main__":
