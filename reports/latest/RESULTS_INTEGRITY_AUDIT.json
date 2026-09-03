@@ -9,10 +9,10 @@
     "odd_lot_extra_bps": 5.0
   },
   "expected_provenance": {
-    "github_run_id": "33774569296",
-    "optimizer_sha": "7e9939fcdb2fa9f5c03461df58d46b38711c08be",
+    "github_run_id": "33779940780",
+    "optimizer_sha": "cd75d75a6b843b6ddf9846ff1016414106d41073",
     "github_repository": "mycroft440/otimizacao",
-    "snapshot_upstream_sha": "d5dc65cfbeb75bb8fd4fa4c6cebd9f72b032eafb",
+    "snapshot_upstream_sha": "c414ed6cfd8be166d437f1c46acd261795e85818",
     "snapshot_universe_sha256": "21fa010d57a2dfa9905f68d2562428418e4473e7c906aabd553a50e5c3b31b18",
     "snapshot_requested_end": "2026-09-02"
   },
@@ -43,10 +43,10 @@
       19
     ],
     "expected_provenance": {
-      "github_run_id": "33774569296",
-      "optimizer_sha": "7e9939fcdb2fa9f5c03461df58d46b38711c08be",
+      "github_run_id": "33779940780",
+      "optimizer_sha": "cd75d75a6b843b6ddf9846ff1016414106d41073",
       "github_repository": "mycroft440/otimizacao",
-      "snapshot_upstream_sha": "d5dc65cfbeb75bb8fd4fa4c6cebd9f72b032eafb",
+      "snapshot_upstream_sha": "c414ed6cfd8be166d437f1c46acd261795e85818",
       "snapshot_universe_sha256": "21fa010d57a2dfa9905f68d2562428418e4473e7c906aabd553a50e5c3b31b18",
       "snapshot_requested_end": "2026-09-02"
     },
@@ -65,10 +65,10 @@
       "odd_lot_extra_bps": 5.0,
       "portfolio_policy": "pine_v17_hold_same_target_no_residual_reinvestment",
       "momentum_dtype": "float64",
-      "github_run_id": "33774569296",
-      "optimizer_sha": "7e9939fcdb2fa9f5c03461df58d46b38711c08be",
+      "github_run_id": "33779940780",
+      "optimizer_sha": "cd75d75a6b843b6ddf9846ff1016414106d41073",
       "github_repository": "mycroft440/otimizacao",
-      "snapshot_upstream_sha": "d5dc65cfbeb75bb8fd4fa4c6cebd9f72b032eafb",
+      "snapshot_upstream_sha": "c414ed6cfd8be166d437f1c46acd261795e85818",
       "snapshot_universe_sha256": "21fa010d57a2dfa9905f68d2562428418e4473e7c906aabd553a50e5c3b31b18",
       "snapshot_requested_end": "2026-09-02"
     },
@@ -79,7 +79,7 @@
         "json": "shard-results/shard_0.json",
         "rows": 58528,
         "csv_sha256": "4c737c3dee502abc95d32f6997e1bced3d284e4a48e0b60c1cfe236c1daa4203",
-        "json_sha256": "0f7fcc39a3a5c19761d03fe735346c700b504a0845a5a56c20d1b9dc13e89d6f"
+        "json_sha256": "4d8ee4604288d70aeafb21d68b311e93140c947e2887fbadd47b22a2ca439ce2"
       },
       {
         "shard": 1,
@@ -87,7 +87,7 @@
         "json": "shard-results/shard_1.json",
         "rows": 58528,
         "csv_sha256": "c53664c90e59b80b898f5bf5cf8e260881332769254b9546888a860117472729",
-        "json_sha256": "5bc6997695da4d92c8375e89616342e29fd17c58fa85525c97238925ea2aea36"
+        "json_sha256": "75f8edd0f04d2652a8a42c8ef2eb4460d94006930e07fab4fbe82ebe1f24057b"
       },
       {
         "shard": 10,
@@ -95,7 +95,7 @@
         "json": "shard-results/shard_10.json",
         "rows": 58528,
         "csv_sha256": "cf39be33c24b6317f4d103d2ff3848cea186a9472782358e4f2e472721500bf3",
-        "json_sha256": "db929a3787ae0d02371ef07ebf873d4f4e012d49a8c84e3b368862066c6258bb"
+        "json_sha256": "59b9103e3f87f302116958527dfab93a1ac1c1460fae5f82b6fbb27d6624ffeb"
       },
       {
         "shard": 11,
@@ -103,7 +103,7 @@
         "json": "shard-results/shard_11.json",
         "rows": 58528,
         "csv_sha256": "1e81896121a135a7fac272f495ebb47bdf42c14b62364b6520e9a09354ff05f0",
-        "json_sha256": "995d6aade13b051abfae3e9f49049b4cb72a5eb150db6df28105f88051b4c606"
+        "json_sha256": "129477e1c25ecd23fb0deb9cc25957f6eaf4837a0ea2b5c260ca909adfe9709d"
       },
       {
         "shard": 12,
@@ -111,7 +111,7 @@
         "json": "shard-results/shard_12.json",
         "rows": 58528,
         "csv_sha256": "356fde63f555eeecc0235db38f7311f9be84b4172c8d337c6c6fdb48c6590efa",
-        "json_sha256": "92f996dbdbba26f0e040b30677b3405d857d958bd6e75dcfc6cce4a46c58e3c9"
+        "json_sha256": "b45c904f38a8810c2ef0dc9746941c86f8af3263eba3da24d9afb7006f9c5471"
       },
       {
         "shard": 13,
@@ -119,7 +119,7 @@
         "json": "shard-results/shard_13.json",
         "rows": 58528,
         "csv_sha256": "e88c0da6cf918c6d51f7811a146e502a82f2038baaa57db4b22805b43b9a4da0",
-        "json_sha256": "ecf12dfb82d17e268f53d7ba20726aa348da22e572088e113116146a8ee67095"
+        "json_sha256": "5ea1ac3130361552641d2dab7940ff96e48d6f33e39f9f00c17017f3a79691f0"
       },
       {
         "shard": 14,
@@ -127,7 +127,7 @@
         "json": "shard-results/shard_14.json",
         "rows": 58528,
         "csv_sha256": "cb9dfa8c35772e12836369098bd7ed56a10ee80bc9a5b5eeef0392a6bff97f49",
-        "json_sha256": "2812f320cc27702d50566a1e49dbf5d5be99cba8eab6d19b820b4edf72c7a9f5"
+        "json_sha256": "8db087cf709317fa906d6daaaaaa50f9ab82b87f1da45f6c824c3f5fb78242d7"
       },
       {
         "shard": 15,
@@ -135,7 +135,7 @@
         "json": "shard-results/shard_15.json",
         "rows": 58528,
         "csv_sha256": "f19cfc0ffbdeaddcad5c854f1e42a42210423261fa0cfe77df36a92a8d4cf9df",
-        "json_sha256": "dcbc60f1070a4695fbd6a9c09bb6a28d0b7ae5eb11b2fc030537546f76fda313"
+        "json_sha256": "14c8bb82c1b80c3b976727d513a9fec3dde12c47b845373d7237b1031baf6e3d"
       },
       {
         "shard": 16,
@@ -143,7 +143,7 @@
         "json": "shard-results/shard_16.json",
         "rows": 43896,
         "csv_sha256": "742d10675d8670a7a69c810c7186190ccbe30620dba78ebda14fcc12bc80b6de",
-        "json_sha256": "99819fc88b711518fc6e9d14510807e1b1d263a2dd6c125965c2eae1b5bcf09f"
+        "json_sha256": "78d31553347bff75dd118bc7dca4072d673746f158a5073fbb0ce21fca02a3ec"
       },
       {
         "shard": 17,
@@ -151,7 +151,7 @@
         "json": "shard-results/shard_17.json",
         "rows": 43896,
         "csv_sha256": "5565a6de85e0e08ffc045a02b4b56d8d7c859b586fa0f44c14a6e90444f72374",
-        "json_sha256": "9c39bcaa38b2e4defe04b0ed4a892a52700869c8fa34cbdcfd8ecf3ca26e7d37"
+        "json_sha256": "143eafe10c1f59265b27388c036a8ef8f5a25a1489ff41acf3f69a5f5b91c1bd"
       },
       {
         "shard": 18,
@@ -159,7 +159,7 @@
         "json": "shard-results/shard_18.json",
         "rows": 43896,
         "csv_sha256": "ff5ad5b20033d4d2ef433e59c75164f71554997225139aa0e46d2d95dddfa046",
-        "json_sha256": "66e41f4219eb3445bf0259524dcf55e51549ff48c765cd08fd6d01eb913c0b8e"
+        "json_sha256": "c373bec787eb317ec0b2d0ae81ca5a69c6463ebf2fbd50817e16e4d323b7532b"
       },
       {
         "shard": 19,
@@ -167,7 +167,7 @@
         "json": "shard-results/shard_19.json",
         "rows": 43896,
         "csv_sha256": "eff8d7229910bf36ba1f00125683d3b8e05baee755301209d42c246d1d6ce6bf",
-        "json_sha256": "6a71c3cb6a4dff83dd62677d676c43b3239e7365fa173c7922d40e491f1df834"
+        "json_sha256": "97059bd3f988d51082537afcfe0916b95ba1513cd21e50504cd433577cb62f76"
       },
       {
         "shard": 2,
@@ -175,7 +175,7 @@
         "json": "shard-results/shard_2.json",
         "rows": 58528,
         "csv_sha256": "9bfd4b26a984df1b978d76cd7309f5a0d540d52b3aa6309b319250709a2dd9dc",
-        "json_sha256": "f53ae6dce2061dd7accd36c6de31bf413c0210ececc8aa74b0873efa354e4ae5"
+        "json_sha256": "7d7956f8a2ae7b5bafdde92b614f12bcd0f1a9bd940398d1d8cdb0f987557c47"
       },
       {
         "shard": 3,
@@ -183,7 +183,7 @@
         "json": "shard-results/shard_3.json",
         "rows": 58528,
         "csv_sha256": "130a0dda4ff36e2cfb9f1c583a628b6007ab4f87a57776053aaa4666e7a41050",
-        "json_sha256": "2430d9c158b26a5ee1f31e05b9c47830bd8c16fe448a84df210a175b38418bcf"
+        "json_sha256": "79ab8d4646a877566dbf77526d40f87f24e681b212f0ebf67feefbc03f663534"
       },
       {
         "shard": 4,
@@ -191,7 +191,7 @@
         "json": "shard-results/shard_4.json",
         "rows": 58528,
         "csv_sha256": "072d00a3ade9278f5ca80cead4c2f7122c5102eabc9b5c15d09d5eef546bbd89",
-        "json_sha256": "a98f387ab89277a0b8e6926e84957dcb0984168d29ef5045b0970ec60144778c"
+        "json_sha256": "08298effae8acdcada35bc4f2372ce08d9c1e9b1ec99c3662adda14308d0b263"
       },
       {
         "shard": 5,
@@ -199,7 +199,7 @@
         "json": "shard-results/shard_5.json",
         "rows": 58528,
         "csv_sha256": "061fe3e7bffb2d605081b2e29e4005734cea001a6a07490796ab142a71570b6a",
-        "json_sha256": "ec8f301237e07410b7b82ba1fbcd8fd6f2f5c12af1cad35d604045ffa7a8dd1d"
+        "json_sha256": "d988903d9ae6d8a8afb5983e9ed4d55a854e294662798ac72b5a673497ec96ca"
       },
       {
         "shard": 6,
@@ -207,7 +207,7 @@
         "json": "shard-results/shard_6.json",
         "rows": 58528,
         "csv_sha256": "07b3f7ec3e886d92d4d9655f663af35fc93502b9eb5db8eeb07317a0c94672ec",
-        "json_sha256": "b28f4d273993122c8832676cb68e7e3cc92221b1b6eb2a9a51284299d6eb1fdb"
+        "json_sha256": "06affb2d7aff4b2eea3e8b8912d779b76dcc79bbec85b0886c7a38526a050bc6"
       },
       {
         "shard": 7,
@@ -215,7 +215,7 @@
         "json": "shard-results/shard_7.json",
         "rows": 58528,
         "csv_sha256": "11041c92f5984923523735af3ba12e505784feb470aaebe8288a823874b91676",
-        "json_sha256": "98eecdd8ea615d130772ea265982539eb35a84fb64d9df34d75fbf427c4a64da"
+        "json_sha256": "db5ccdc01cafb1b28a839e83c1e66da3e77f64b39bb76e50ad6052f5c137be95"
       },
       {
         "shard": 8,
@@ -223,7 +223,7 @@
         "json": "shard-results/shard_8.json",
         "rows": 58528,
         "csv_sha256": "4943b713ab7755755a57701a499d883b58ee56e0ab75ed7653e1cfbac33658ae",
-        "json_sha256": "7d24a4e8752f3aa4f1f9482aae3a5dc44279ee454d3d577bd24e940b10e12081"
+        "json_sha256": "b1391bd507559022e7e05bc38de151168407d0180d6fb9aa5f1c26f0ea42e8a2"
       },
       {
         "shard": 9,
@@ -231,7 +231,7 @@
         "json": "shard-results/shard_9.json",
         "rows": 58528,
         "csv_sha256": "48743eba6a3bf5071442c6e14aab1a86d2476eb40f1e1e393c694451436d5056",
-        "json_sha256": "cc54a5fa42f7d10b073623a7a852d3ac7b58565cc82c3281b360ad1aec08f335"
+        "json_sha256": "e7726dd8b6b2fbb7cdf81a27cb04d51a05070d43c80116ddaf4a0221bf1bbfcb"
       }
     ],
     "failures": []

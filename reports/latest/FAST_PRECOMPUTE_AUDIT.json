@@ -1,7 +1,7 @@
 {
   "status": "PASS",
-  "schema_version": 2,
-  "mode": "bit_exact_precompute_and_portfolio_deterministic_broad_sample",
+  "schema_version": 3,
+  "mode": "bit_exact_cache_threads_batch_and_portfolio",
   "random_seed": 20260903,
   "grid": {
     "gap": [
@@ -49,13 +49,19 @@
     "gap_signal_pairs": 110,
     "parameter_combinations_checked": 1540
   },
-  "checks": {
+  "direct_precompute_checks": {
     "pairs": true,
     "gap_state_bit_exact": true,
     "momentum_bit_exact": true,
     "vol_valid_bit_exact": true
   },
-  "portfolio_checks": [
+  "cache_precompute_checks": {
+    "pairs": true,
+    "gap_state_bit_exact": true,
+    "momentum_bit_exact": true,
+    "vol_valid_bit_exact": true
+  },
+  "cache_portfolio_checks": [
     {
       "momentum": 5,
       "checks": {
@@ -238,5 +244,190 @@
         "slippage": true
       }
     }
-  ]
+  ],
+  "batch_portfolio_checks": [
+    {
+      "momentum": 5,
+      "checks": {
+        "final_equity": true,
+        "cash": true,
+        "shares": true,
+        "holding": true,
+        "trades": true,
+        "skipped": true,
+        "fees": true,
+        "slippage": true
+      }
+    },
+    {
+      "momentum": 35,
+      "checks": {
+        "final_equity": true,
+        "cash": true,
+        "shares": true,
+        "holding": true,
+        "trades": true,
+        "skipped": true,
+        "fees": true,
+        "slippage": true
+      }
+    },
+    {
+      "momentum": 49,
+      "checks": {
+        "final_equity": true,
+        "cash": true,
+        "shares": true,
+        "holding": true,
+        "trades": true,
+        "skipped": true,
+        "fees": true,
+        "slippage": true
+      }
+    },
+    {
+      "momentum": 63,
+      "checks": {
+        "final_equity": true,
+        "cash": true,
+        "shares": true,
+        "holding": true,
+        "trades": true,
+        "skipped": true,
+        "fees": true,
+        "slippage": true
+      }
+    },
+    {
+      "momentum": 68,
+      "checks": {
+        "final_equity": true,
+        "cash": true,
+        "shares": true,
+        "holding": true,
+        "trades": true,
+        "skipped": true,
+        "fees": true,
+        "slippage": true
+      }
+    },
+    {
+      "momentum": 78,
+      "checks": {
+        "final_equity": true,
+        "cash": true,
+        "shares": true,
+        "holding": true,
+        "trades": true,
+        "skipped": true,
+        "fees": true,
+        "slippage": true
+      }
+    },
+    {
+      "momentum": 106,
+      "checks": {
+        "final_equity": true,
+        "cash": true,
+        "shares": true,
+        "holding": true,
+        "trades": true,
+        "skipped": true,
+        "fees": true,
+        "slippage": true
+      }
+    },
+    {
+      "momentum": 121,
+      "checks": {
+        "final_equity": true,
+        "cash": true,
+        "shares": true,
+        "holding": true,
+        "trades": true,
+        "skipped": true,
+        "fees": true,
+        "slippage": true
+      }
+    },
+    {
+      "momentum": 123,
+      "checks": {
+        "final_equity": true,
+        "cash": true,
+        "shares": true,
+        "holding": true,
+        "trades": true,
+        "skipped": true,
+        "fees": true,
+        "slippage": true
+      }
+    },
+    {
+      "momentum": 156,
+      "checks": {
+        "final_equity": true,
+        "cash": true,
+        "shares": true,
+        "holding": true,
+        "trades": true,
+        "skipped": true,
+        "fees": true,
+        "slippage": true
+      }
+    },
+    {
+      "momentum": 181,
+      "checks": {
+        "final_equity": true,
+        "cash": true,
+        "shares": true,
+        "holding": true,
+        "trades": true,
+        "skipped": true,
+        "fees": true,
+        "slippage": true
+      }
+    },
+    {
+      "momentum": 191,
+      "checks": {
+        "final_equity": true,
+        "cash": true,
+        "shares": true,
+        "holding": true,
+        "trades": true,
+        "skipped": true,
+        "fees": true,
+        "slippage": true
+      }
+    },
+    {
+      "momentum": 192,
+      "checks": {
+        "final_equity": true,
+        "cash": true,
+        "shares": true,
+        "holding": true,
+        "trades": true,
+        "skipped": true,
+        "fees": true,
+        "slippage": true
+      }
+    },
+    {
+      "momentum": 252,
+      "checks": {
+        "final_equity": true,
+        "cash": true,
+        "shares": true,
+        "holding": true,
+        "trades": true,
+        "skipped": true,
+        "fees": true,
+        "slippage": true
+      }
+    }
+  ],
+  "cache_sha256": "fc1393efa67e865ccef978f789bc4c52ed8030ffa32b552a62d736af3f81ccda"
 }
