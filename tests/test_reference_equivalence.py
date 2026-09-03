@@ -155,10 +155,11 @@ class ReferenceEngineSyntheticTests(unittest.TestCase):
                 market.frames[ticker].to_csv(
                     root / "data/candles" / f"{ticker.lower()}_1d.csv", index=False
                 )
+            disk_market = opt.load_market(root, market.start, market.end)
             fast_shared.build_fast_cache(root, market.start, market.end, 5, 63, 21)
             cached = fast_shared.load_fast_cache(root, market.start, market.end, [5, 30, 63], 21)
             self.assertIsNotNone(cached)
-            original = opt.precompute_shard(market, [5, 20], [2, 9], [5, 30, 63], 21)
+            original = opt.precompute_shard(disk_market, [5, 20], [2, 9], [5, 30, 63], 21)
             accelerated = fast.fast_precompute_shard(cached, [5, 20], [2, 9], [5, 30, 63], 21)
             self.assertEqual(original[0], accelerated[0])
             self.assertTrue(np.array_equal(original[1], accelerated[1]))
