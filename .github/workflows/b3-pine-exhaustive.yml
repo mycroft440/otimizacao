@@ -36,9 +36,9 @@ on:
         required: true
         default: '252'
       vol_min:
-        description: VOL_PERIOD minimo
+        description: VOL_PERIOD minimo (Pine exige pelo menos 2 para variancia amostral)
         required: true
-        default: '1'
+        default: '2'
       vol_max:
         description: VOL_PERIOD maximo
         required: true
@@ -83,7 +83,7 @@ env:
   SIGNAL_MAX: ${{ inputs.signal_max || '60' }}
   MOMENTUM_MIN: ${{ inputs.momentum_min || '5' }}
   MOMENTUM_MAX: ${{ inputs.momentum_max || '252' }}
-  VOL_MIN: ${{ inputs.vol_min || '1' }}
+  VOL_MIN: ${{ inputs.vol_min || '2' }}
   VOL_MAX: ${{ inputs.vol_max || '60' }}
   INITIAL_CASH: ${{ inputs.initial_cash || '1000' }}
   FEE_BPS: ${{ inputs.fee_bps || '3.25' }}
@@ -357,7 +357,7 @@ jobs:
           compression-level: 4
 
   optimize:
-    name: Shard ${{ matrix.shard }} / 19 - VOL 1..60
+    name: Shard ${{ matrix.shard }} / 19 - VOL 2..60
     needs: preflight
     runs-on: ubuntu-latest
     timeout-minutes: 90
@@ -540,7 +540,7 @@ jobs:
               'pine_external_golden_validation': 'NOT_YET_AVAILABLE',
               'data_integrity': 'PASS',
               'warmup_validation': 'PASS',
-              'grid_integrity': 'PASS_4D_VOL_1_TO_60',
+              'grid_integrity': 'PASS_4D_VOL_2_TO_60',
               'financial_integrity': 'PASS_STREAMING_SHARD_VALIDATION',
               'independent_reference_engine': 'PASS',
               'stale_price_diagnostic': 'PASS',
@@ -601,6 +601,6 @@ jobs:
           if git diff --cached --quiet; then
             echo "Sem alteracoes nos resultados resumidos."
           else
-            git commit -m "Publish hardened B3 Pine VOL 1-60 optimization [skip ci]"
+            git commit -m "Publish hardened B3 Pine VOL 2-60 optimization [skip ci]"
             git push origin HEAD:main
           fi
