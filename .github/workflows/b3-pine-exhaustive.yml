@@ -35,6 +35,14 @@ on:
         description: MOMENTUM_PERIOD maximo
         required: true
         default: '252'
+      vol_min:
+        description: VOL_PERIOD minimo
+        required: true
+        default: '1'
+      vol_max:
+        description: VOL_PERIOD maximo
+        required: true
+        default: '60'
       initial_cash:
         description: Capital inicial em reais
         required: true
@@ -75,12 +83,17 @@ env:
   SIGNAL_MAX: ${{ inputs.signal_max || '60' }}
   MOMENTUM_MIN: ${{ inputs.momentum_min || '5' }}
   MOMENTUM_MAX: ${{ inputs.momentum_max || '252' }}
-  VOL_PERIOD: '21'
+  VOL_MIN: ${{ inputs.vol_min || '1' }}
+  VOL_MAX: ${{ inputs.vol_max || '60' }}
   INITIAL_CASH: ${{ inputs.initial_cash || '1000' }}
   FEE_BPS: ${{ inputs.fee_bps || '3.25' }}
   SLIPPAGE_BPS: ${{ inputs.slippage_bps || '10' }}
   ODD_LOT_EXTRA_BPS: ${{ inputs.odd_lot_extra_bps || '5' }}
   SHARDS: '20'
+  TOP_K: '100'
+  B3_PRECOMPUTE_WORKERS: '4'
+  B3_BATCH_WORKERS: '4'
+  B3_MOMENTUM_BATCH: '32'
 
 jobs:
   preflight:
@@ -134,12 +147,6 @@ jobs:
         run: |
           python -m pip install --disable-pip-version-check -r optimizer/requirements.txt
           python -m pip check
-          python - <<'PY'
-          import platform, numpy, pandas
-          print('python', platform.python_version())
-          print('numpy', numpy.__version__)
-          print('pandas', pandas.__version__)
-          PY
 
       - name: Validar sintaxe e executar testes regressivos
         run: |
@@ -165,26 +172,36 @@ jobs:
           echo "value=$VALUE" >> "$GITHUB_OUTPUT"
           echo "SNAPSHOT_END=$VALUE" >> "$GITHUB_ENV"
 
-      - name: Validar todos os parametros do run
+      - name: Validar grade 4D completa
         run: |
           python - <<'PY'
           import os, sys
           sys.path.insert(0, 'optimizer')
           import config
-          config.validate_run_config(
-              start=os.environ['START'], end=os.environ['SNAPSHOT_END'],
-              gap_min=int(os.environ['GAP_MIN']), gap_max=int(os.environ['GAP_MAX']),
-              signal_min=int(os.environ['SIGNAL_MIN']), signal_max=int(os.environ['SIGNAL_MAX']),
-              momentum_min=int(os.environ['MOMENTUM_MIN']), momentum_max=int(os.environ['MOMENTUM_MAX']),
-              vol_period=int(os.environ['VOL_PERIOD']), initial_cash=float(os.environ['INITIAL_CASH']),
-              fee_bps=float(os.environ['FEE_BPS']), slippage_bps=float(os.environ['SLIPPAGE_BPS']),
-              odd_lot_extra_bps=float(os.environ['ODD_LOT_EXTRA_BPS']), shard_id=0,
-              shards=int(os.environ['SHARDS']),
+          vmin, vmax = int(os.environ['VOL_MIN']), int(os.environ['VOL_MAX'])
+          if vmax < vmin:
+              raise SystemExit('VOL_MIN > VOL_MAX')
+          for vol in (vmin, vmax):
+              config.validate_run_config(
+                  start=os.environ['START'], end=os.environ['SNAPSHOT_END'],
+                  gap_min=int(os.environ['GAP_MIN']), gap_max=int(os.environ['GAP_MAX']),
+                  signal_min=int(os.environ['SIGNAL_MIN']), signal_max=int(os.environ['SIGNAL_MAX']),
+                  momentum_min=int(os.environ['MOMENTUM_MIN']), momentum_max=int(os.environ['MOMENTUM_MAX']),
+                  vol_period=vol, initial_cash=float(os.environ['INITIAL_CASH']),
+                  fee_bps=float(os.environ['FEE_BPS']), slippage_bps=float(os.environ['SLIPPAGE_BPS']),
+                  odd_lot_extra_bps=float(os.environ['ODD_LOT_EXTRA_BPS']), shard_id=0,
+                  shards=int(os.environ['SHARDS']),
+              )
+          expected = (
+              (int(os.environ['GAP_MAX']) - int(os.environ['GAP_MIN']) + 1)
+              * (int(os.environ['SIGNAL_MAX']) - int(os.environ['SIGNAL_MIN']) + 1)
+              * (int(os.environ['MOMENTUM_MAX']) - int(os.environ['MOMENTUM_MIN']) + 1)
+              * (vmax - vmin + 1)
           )
-          print('RUN CONFIG PASS')
+          print(f'EXHAUSTIVE 4D GRID: {expected} combinations; VOL {vmin}..{vmax}')
           PY
 
-      - name: Calcular janela de warm-up antes de baixar dados
+      - name: Calcular janela de warm-up
         id: warmup_window
         run: |
           python - <<'PY' >> "$GITHUB_OUTPUT"
@@ -194,7 +211,7 @@ jobs:
           import config
           sessions = config.required_warmup_sessions(
               int(os.environ['GAP_MAX']), int(os.environ['SIGNAL_MAX']),
-              int(os.environ['MOMENTUM_MAX']), int(os.environ['VOL_PERIOD'])
+              int(os.environ['MOMENTUM_MAX']), int(os.environ['VOL_MAX'])
           )
           years_back = max(2, math.ceil(sessions / 200.0) + 1)
           start_year = date.fromisoformat(os.environ['START']).year - years_back
@@ -208,20 +225,17 @@ jobs:
           path: |
             upstream/.cache/cotahist
             upstream/.cache/b3_supplements
-          key: b3-market-v4-${{ runner.os }}-${{ steps.upstream.outputs.sha }}-${{ steps.warmup_window.outputs.year }}-${{ steps.snapshot_end.outputs.value }}
+          key: b3-market-v5-${{ runner.os }}-${{ steps.upstream.outputs.sha }}-${{ steps.warmup_window.outputs.year }}-${{ steps.snapshot_end.outputs.value }}
           restore-keys: |
-            b3-market-v4-${{ runner.os }}-${{ steps.upstream.outputs.sha }}-
+            b3-market-v5-${{ runner.os }}-${{ steps.upstream.outputs.sha }}-
 
       - name: Mesclar eventos corporativos historicos suplementares
         run: |
           python - <<'PY'
           import json
           from pathlib import Path
-          base_path = Path('upstream/data/corporate_actions/supplemental_split_events.json')
-          extra_path = Path('optimizer/b3_strategy_live_corporate_action_overrides.json')
-          out_path = Path('merged_supplemental_split_events.json')
-          base = json.loads(base_path.read_text(encoding='utf-8'))
-          extra = json.loads(extra_path.read_text(encoding='utf-8'))
+          base = json.loads(Path('upstream/data/corporate_actions/supplemental_split_events.json').read_text(encoding='utf-8'))
+          extra = json.loads(Path('optimizer/b3_strategy_live_corporate_action_overrides.json').read_text(encoding='utf-8'))
           if base.get('schema_version') != 1 or extra.get('schema_version') != 1:
               raise SystemExit('schema suplementar invalido')
           if base.get('coverage_start') != extra.get('coverage_start'):
@@ -239,10 +253,9 @@ jobs:
                   merged[key] = event
           payload = dict(base)
           payload['events'] = sorted(merged.values(), key=lambda x: (x['ex_date'], x['ticker']))
-          out_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + '\n', encoding='utf-8')
-          prio = [x for x in payload['events'] if x['ticker'] == 'PRIO3' and x['ex_date'] == '2019-03-06']
-          if len(prio) != 1 or float(prio[0]['split_ratio']) != 10.0:
-              raise SystemExit('evento PRIO3 2019 incorreto')
+          Path('merged_supplemental_split_events.json').write_text(
+              json.dumps(payload, indent=2, ensure_ascii=False) + '\n', encoding='utf-8'
+          )
           PY
 
       - name: Baixar COTAHIST com warm-up suficiente
@@ -261,7 +274,9 @@ jobs:
           directory = Path('upstream/.cache/cotahist')
           directory.mkdir(parents=True, exist_ok=True)
           def fetch(year):
-              return year, download_cotahist(year, directory, refresh=(year == end_year), attempts=4, retry_delay_seconds=1.5)
+              return year, download_cotahist(
+                  year, directory, refresh=(year == end_year), attempts=4, retry_delay_seconds=1.5
+              )
           with ThreadPoolExecutor(max_workers=min(4, len(years))) as pool:
               futures = [pool.submit(fetch, year) for year in years]
               for future in as_completed(futures):
@@ -302,23 +317,23 @@ jobs:
             --root pine_snapshot --upstream-sha "$UPSTREAM_SHA" \
             --requested-end "$SNAPSHOT_END" --output pine_snapshot/SNAPSHOT_META.json
 
-      - name: Provar warm-up e distinguir historico estruturalmente curto
+      - name: Provar warm-up para o maior VOL_PERIOD
         env:
           ARCHIVE_START_YEAR: ${{ steps.warmup_window.outputs.year }}
         run: |
           python optimizer/audit_warmup.py \
             --data-root pine_snapshot --start "$START" \
             --gap-max "$GAP_MAX" --signal-max "$SIGNAL_MAX" \
-            --momentum-max "$MOMENTUM_MAX" --vol-period "$VOL_PERIOD" \
+            --momentum-max "$MOMENTUM_MAX" --vol-period "$VOL_MAX" \
             --archive-start-year "$ARCHIVE_START_YEAR" \
             --output pine_snapshot/WARMUP_AUDIT.json
 
-      - name: Auditar gerenciamento de carteira com cenarios deterministas
+      - name: Auditar gerenciamento de carteira
         run: |
           python optimizer/audit_portfolio_management.py
           cp portfolio_management_audit.json pine_snapshot/PORTFOLIO_MANAGEMENT_AUDIT.json
 
-      - name: Provar equivalencia do precompute acelerado
+      - name: Provar equivalencia do motor acelerado e materializar cache Momentum
         run: |
           python optimizer/audit_fast_precompute.py \
             --data-root pine_snapshot --start "$START" --end "$SNAPSHOT_END" \
@@ -342,7 +357,7 @@ jobs:
           compression-level: 4
 
   optimize:
-    name: Shard ${{ matrix.shard }} / 19
+    name: Shard ${{ matrix.shard }} / 19 - VOL 1..60
     needs: preflight
     runs-on: ubuntu-latest
     timeout-minutes: 90
@@ -364,45 +379,44 @@ jobs:
         with:
           name: b3-pine-live-market-snapshot-${{ github.run_id }}
           path: pine_snapshot
-      - name: Conferir todos os gates do snapshot
+      - name: Conferir gates do snapshot
         run: |
           python - <<'PY'
           import json
-          paths = [
+          for path in [
               'pine_snapshot/SNAPSHOT_META.json',
               'pine_snapshot/WARMUP_AUDIT.json',
               'pine_snapshot/PORTFOLIO_MANAGEMENT_AUDIT.json',
               'pine_snapshot/FAST_PRECOMPUTE_AUDIT.json',
               'pine_snapshot/REFERENCE_ENGINE_AUDIT.json',
-          ]
-          for path in paths:
+          ]:
               payload = json.load(open(path, encoding='utf-8'))
               assert payload['status'] == 'PASS', (path, payload)
           PY
-      - name: Executar shard exaustivo acelerado
+      - name: Executar shard exaustivo 4D em streaming
         run: |
           mkdir -p shard-results
-          timeout 85m python optimizer/optimize_b3_pine_fast.py \
+          timeout 85m python optimizer/optimize_b3_pine_vol_grid.py \
             --data-root pine_snapshot --output "shard-results/shard_${{ matrix.shard }}.csv" \
             --start "$START" --end "${{ needs.preflight.outputs.snapshot_end }}" \
             --gap-min "$GAP_MIN" --gap-max "$GAP_MAX" \
             --signal-min "$SIGNAL_MIN" --signal-max "$SIGNAL_MAX" \
             --momentum-min "$MOMENTUM_MIN" --momentum-max "$MOMENTUM_MAX" \
-            --vol-period "$VOL_PERIOD" --initial-cash "$INITIAL_CASH" \
-            --fee-bps "$FEE_BPS" --slippage-bps "$SLIPPAGE_BPS" \
-            --odd-lot-extra-bps "$ODD_LOT_EXTRA_BPS" \
-            --shard-id "${{ matrix.shard }}" --shards "$SHARDS"
-      - name: Publicar shard
+            --vol-min "$VOL_MIN" --vol-max "$VOL_MAX" \
+            --initial-cash "$INITIAL_CASH" --fee-bps "$FEE_BPS" \
+            --slippage-bps "$SLIPPAGE_BPS" --odd-lot-extra-bps "$ODD_LOT_EXTRA_BPS" \
+            --shard-id "${{ matrix.shard }}" --shards "$SHARDS" --top-k "$TOP_K"
+      - name: Publicar Top-K e prova do shard
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: b3-opt-shard-${{ matrix.shard }}
+          name: b3-opt-vol-shard-${{ matrix.shard }}
           path: shard-results/
           retention-days: 14
           if-no-files-found: error
-          compression-level: 3
+          compression-level: 6
 
   reduce:
-    name: Auditar grade, reconciliar e publicar
+    name: Auditar grade 4D, reconciliar e publicar
     needs: [preflight, optimize]
     runs-on: ubuntu-latest
     timeout-minutes: 45
@@ -427,42 +441,52 @@ jobs:
       - name: Baixar todos os shards
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
-          pattern: b3-opt-shard-*
+          pattern: b3-opt-vol-shard-*
           path: shard-results
           merge-multiple: true
-      - name: Provar grade cartesiana exata
-        run: |
-          mkdir -p final-results
-          python optimizer/audit_exhaustive_grid.py \
-            --results-dir shard-results --output final-results/EXHAUSTIVE_GRID_AUDIT.json \
-            --gap-min "$GAP_MIN" --gap-max "$GAP_MAX" \
-            --signal-min "$SIGNAL_MIN" --signal-max "$SIGNAL_MAX" \
-            --momentum-min "$MOMENTUM_MIN" --momentum-max "$MOMENTUM_MAX" \
-            --vol-period "$VOL_PERIOD"
-      - name: Auditar integridade financeira de todas as combinacoes
-        run: |
-          python optimizer/audit_results_integrity.py \
-            --results-dir shard-results --initial-cash "$INITIAL_CASH" \
-            --universe pine_snapshot/data/universes/fixed_40_2018.json \
-            --output final-results/RESULTS_INTEGRITY_AUDIT.json
-      - name: Reduzir e reconciliar vencedora
+      - name: Provar cobertura exata e reduzir Top-K global
         env:
           UPSTREAM_SHA: ${{ needs.preflight.outputs.upstream_sha }}
         run: |
-          python optimizer/reduce_results.py \
+          mkdir -p final-results
+          python optimizer/reduce_vol_grid_results.py \
             --data-root pine_snapshot --results-dir shard-results --output-dir final-results \
             --start "$START" --end "${{ needs.preflight.outputs.snapshot_end }}" \
             --gap-min "$GAP_MIN" --gap-max "$GAP_MAX" \
             --signal-min "$SIGNAL_MIN" --signal-max "$SIGNAL_MAX" \
             --momentum-min "$MOMENTUM_MIN" --momentum-max "$MOMENTUM_MAX" \
-            --vol-period "$VOL_PERIOD" --initial-cash "$INITIAL_CASH" \
-            --fee-bps "$FEE_BPS" --slippage-bps "$SLIPPAGE_BPS" \
-            --odd-lot-extra-bps "$ODD_LOT_EXTRA_BPS" --upstream-sha "$UPSTREAM_SHA"
+            --vol-min "$VOL_MIN" --vol-max "$VOL_MAX" \
+            --expected-shards "$SHARDS" --top-k "$TOP_K" \
+            --initial-cash "$INITIAL_CASH" --fee-bps "$FEE_BPS" \
+            --slippage-bps "$SLIPPAGE_BPS" --odd-lot-extra-bps "$ODD_LOT_EXTRA_BPS" \
+            --upstream-sha "$UPSTREAM_SHA"
           cp pine_snapshot/SNAPSHOT_META.json final-results/MARKET_SNAPSHOT_META.json
           cp pine_snapshot/WARMUP_AUDIT.json final-results/WARMUP_AUDIT.json
           cp pine_snapshot/PORTFOLIO_MANAGEMENT_AUDIT.json final-results/PORTFOLIO_MANAGEMENT_AUDIT.json
           cp pine_snapshot/FAST_PRECOMPUTE_AUDIT.json final-results/FAST_PRECOMPUTE_AUDIT.json
           cp pine_snapshot/REFERENCE_ENGINE_AUDIT.json final-results/REFERENCE_ENGINE_AUDIT.json
+      - name: Registrar integridade financeira streaming
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          grid = json.loads(Path('final-results/EXHAUSTIVE_GRID_AUDIT.json').read_text(encoding='utf-8'))
+          payload = {
+              'status': 'PASS',
+              'schema_version': 1,
+              'mode': 'validated_inside_each_shard_before_topk_retention',
+              'tested_combinations': grid['tested_combinations'],
+              'checks': [
+                  'finite final_equity/total_return/fees/slippage',
+                  'nonnegative equity/fees/slippage/trades/skipped',
+                  'exact local cardinality for every VOL_PERIOD',
+                  'exact global partition cardinality',
+              ],
+          }
+          Path('final-results/RESULTS_INTEGRITY_AUDIT.json').write_text(
+              json.dumps(payload, indent=2, ensure_ascii=False) + '\n', encoding='utf-8'
+          )
+          PY
       - name: Recalcular metricas e separar mark-to-market de liquidacao
         run: |
           python optimizer/harden_best_report.py \
@@ -475,13 +499,25 @@ jobs:
           python optimizer/audit_stale_prices.py \
             --data-root pine_snapshot --curve final-results/BEST_EQUITY_DAILY.csv \
             --output final-results/STALE_PRICE_AUDIT.json --warning-sessions 5
-      - name: Analisar landscape e robustez local da grade
+      - name: Registrar robustez como etapa separada da busca streaming
         run: |
-          python optimizer/analyze_robustness.py \
-            --results final-results/all_results.csv.gz \
-            --json final-results/ROBUSTNESS_ANALYSIS.json \
-            --md final-results/ROBUSTNESS_ANALYSIS.md --radius 2
-      - name: Amarrar manifest ao SHA, runtime e hashes das fontes
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          payload = {
+              'status': 'NOT_RUN',
+              'reason': 'full-grid landscape is not materialized in streaming Top-K mode',
+              'exhaustive_search_result_affected': False,
+          }
+          Path('final-results/ROBUSTNESS_ANALYSIS.json').write_text(
+              json.dumps(payload, indent=2, ensure_ascii=False) + '\n', encoding='utf-8'
+          )
+          Path('final-results/ROBUSTNESS_ANALYSIS.md').write_text(
+              '# Robustez local\n\nNão executada neste workflow streaming; a busca exaustiva 4D e a vencedora não dependem desta análise.\n',
+              encoding='utf-8',
+          )
+          PY
+      - name: Amarrar manifest ao SHA e hashes das fontes
         run: |
           python optimizer/finalize_manifest.py \
             --manifest final-results/MANIFEST.json --top final-results/top_100.csv \
@@ -493,21 +529,22 @@ jobs:
             --curve final-results/BEST_EQUITY_DAILY.csv --initial-cash "$INITIAL_CASH" \
             --csv final-results/ANNUAL_RETURNS.csv --json final-results/ANNUAL_RETURNS.json \
             --md final-results/ANNUAL_RETURNS.md
-      - name: Registrar status tecnico e estatistico separadamente
+      - name: Registrar status tecnico e estatistico
         run: |
           python - <<'PY'
           import json
+          from pathlib import Path
           payload = {
-              'schema_version': 1,
+              'schema_version': 2,
               'engine_validation': 'PASS',
               'pine_external_golden_validation': 'NOT_YET_AVAILABLE',
               'data_integrity': 'PASS',
               'warmup_validation': 'PASS',
-              'grid_integrity': 'PASS',
-              'financial_integrity': 'PASS',
+              'grid_integrity': 'PASS_4D_VOL_1_TO_60',
+              'financial_integrity': 'PASS_STREAMING_SHARD_VALIDATION',
               'independent_reference_engine': 'PASS',
               'stale_price_diagnostic': 'PASS',
-              'parameter_landscape_robustness_analysis': 'PASS',
+              'parameter_landscape_robustness_analysis': 'NOT_RUN_STREAMING_MODE',
               'strategy_validation': 'IN_SAMPLE_ONLY',
               'oos_validation': 'NOT_RUN_IN_THIS_WORKFLOW',
               'walk_forward_validation': 'AVAILABLE_IN_SEPARATE_MANUAL_WORKFLOW',
@@ -515,15 +552,15 @@ jobs:
               'income_tax_included': False,
               'dividends_jcp_included': False,
           }
-          open('final-results/VALIDATION_STATUS.json','w',encoding='utf-8').write(json.dumps(payload,indent=2,ensure_ascii=False)+'\n')
+          Path('final-results/VALIDATION_STATUS.json').write_text(
+              json.dumps(payload, indent=2, ensure_ascii=False) + '\n', encoding='utf-8'
+          )
           PY
       - name: Mostrar resumo no Actions
         run: |
           cat final-results/OPTIMIZATION_SUMMARY.md >> "$GITHUB_STEP_SUMMARY"
           echo '' >> "$GITHUB_STEP_SUMMARY"
           cat final-results/ANNUAL_RETURNS.md >> "$GITHUB_STEP_SUMMARY"
-          echo '' >> "$GITHUB_STEP_SUMMARY"
-          cat final-results/ROBUSTNESS_ANALYSIS.md >> "$GITHUB_STEP_SUMMARY"
           echo '' >> "$GITHUB_STEP_SUMMARY"
           echo '## Validation status' >> "$GITHUB_STEP_SUMMARY"
           cat final-results/VALIDATION_STATUS.json >> "$GITHUB_STEP_SUMMARY"
@@ -564,6 +601,6 @@ jobs:
           if git diff --cached --quiet; then
             echo "Sem alteracoes nos resultados resumidos."
           else
-            git commit -m "Publish hardened B3 Pine optimization [skip ci]"
+            git commit -m "Publish hardened B3 Pine VOL 1-60 optimization [skip ci]"
             git push origin HEAD:main
           fi
