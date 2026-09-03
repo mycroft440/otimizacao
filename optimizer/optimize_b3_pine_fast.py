@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import os
-import sys
 
 import numpy as np
 import pandas as pd
@@ -84,16 +83,10 @@ def fast_precompute_shard(
 
 
 def _hardened_parse_args():
+    # The reference parser already owns the canonical defaults. Do not infer which
+    # flags were provided by inspecting raw argv: argparse legitimately accepts
+    # both ``--fee-bps 4`` and ``--fee-bps=4``.
     args = _ORIGINAL_PARSE_ARGS()
-    provided = set(sys.argv[1:])
-    if "--fee-bps" not in provided:
-        args.fee_bps = config.DEFAULT_FEE_BPS
-    if "--slippage-bps" not in provided:
-        args.slippage_bps = config.DEFAULT_SLIPPAGE_BPS
-    if "--odd-lot-extra-bps" not in provided:
-        args.odd_lot_extra_bps = config.DEFAULT_ODD_LOT_EXTRA_BPS
-    if "--initial-cash" not in provided:
-        args.initial_cash = config.DEFAULT_INITIAL_CASH
     config.validate_run_config(
         start=args.start,
         end=args.end,
