@@ -6,6 +6,7 @@ import hashlib
 import importlib.metadata
 import json
 import platform
+import subprocess
 from pathlib import Path
 
 
@@ -27,54 +28,58 @@ def parse_args():
     return p.parse_args()
 
 
-def main():
-    args = parse_args()
-    manifest = json.loads(args.manifest.read_text(encoding="utf-8"))
-    source_paths = [
-        "optimizer/requirements.txt",
-        "optimizer/config.py",
-        "optimizer/metrics.py",
+def tracked_source_paths(repo_root: Path) -> list[str]:
+    proc = subprocess.run(
+        [
+            "git",
+            "ls-files",
+            "--",
+            "README.md",
+            "optimizer",
+            "tests",
+            ".github/workflows",
+        ],
+        cwd=repo_root,
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+    paths = sorted(line.strip() for line in proc.stdout.splitlines() if line.strip())
+    if not paths:
+        raise SystemExit("git ls-files nao retornou fontes do otimizador")
+    required = {
+        "optimizer/finalize_manifest.py",
         "optimizer/optimize_b3_pine.py",
         "optimizer/optimize_b3_pine_fast.py",
-        "optimizer/reference_engine.py",
-        "optimizer/reduce_results.py",
-        "optimizer/audit_exhaustive_grid.py",
-        "optimizer/audit_results_integrity.py",
-        "optimizer/audit_shard_set.py",
-        "optimizer/audit_reference_engine.py",
-        "optimizer/audit_snapshot.py",
-        "optimizer/audit_stale_prices.py",
-        "optimizer/audit_warmup.py",
-        "optimizer/audit_pine_golden.py",
-        "optimizer/audit_corporate_actions.py",
-        "optimizer/analyze_robustness.py",
-        "optimizer/build_annual_report.py",
-        "optimizer/harden_best_report.py",
-        "optimizer/validate_top_oos.py",
-        "optimizer/walk_forward_validate.py",
-        "optimizer/walk_forward_windows.json",
-        "tests/test_hardening.py",
-        "tests/test_reference_equivalence.py",
-        "tests/test_oos_guard.py",
-        "tests/test_second_review_regressions.py",
-        "tests/test_workflow_supply_chain.py",
-        "tests/fixtures/pine_reference/README.md",
-        "README.md",
+        "optimizer/audit_fast_precompute.py",
+        "optimizer/audit_portfolio_management.py",
+        "optimizer/b3_strategy_live_universe.json",
+        "optimizer/b3_strategy_live_selection.csv",
+        "optimizer/b3_strategy_live_corporate_action_overrides.json",
         ".github/workflows/b3-pine-exhaustive.yml",
-        ".github/workflows/b3-pine-walk-forward.yml",
-        ".github/workflows/hardening-ci.yml",
-    ]
-    source_hashes = {}
+    }
+    missing = sorted(required - set(paths))
+    if missing:
+        raise SystemExit(f"fontes obrigatorias nao versionadas/nao selecionadas: {missing}")
+    return paths
+
+
+def main():
+    args = parse_args()
+    repo_root = args.repo_root.resolve()
+    manifest = json.loads(args.manifest.read_text(encoding="utf-8"))
+    source_paths = tracked_source_paths(repo_root)
+    source_hashes: dict[str, str] = {}
     for relative in source_paths:
-        path = args.repo_root / relative
-        if not path.exists():
-            raise SystemExit(f"arquivo de fonte ausente ao finalizar manifest: {relative}")
+        path = repo_root / relative
+        if not path.is_file():
+            raise SystemExit(f"arquivo versionado ausente ao finalizar manifest: {relative}")
         source_hashes[relative] = sha256_file(path)
 
     execution = manifest.get("execution") or {}
     manifest.update(
         {
-            "schema_version": 2,
+            "schema_version": 3,
             "optimizer_repository": "mycroft440/otimizacao",
             "optimizer_sha": args.optimizer_sha,
             "runtime": {
@@ -83,6 +88,12 @@ def main():
                 "pandas": importlib.metadata.version("pandas"),
                 "platform": platform.platform(),
             },
+            "source_identity": {
+                "selection": "all git-tracked files under README.md, optimizer/, tests/, .github/workflows/",
+                "tracked_file_count": len(source_hashes),
+                "files_sha256": source_hashes,
+            },
+            # Backward-compatible alias for consumers of schema v2.
             "optimizer_source_sha256": source_hashes,
             "selection_provenance": {
                 "mode": args.selection_mode,
@@ -98,6 +109,7 @@ def main():
             {
                 "optimizer_sha": args.optimizer_sha,
                 "selection_mode": args.selection_mode,
+                "tracked_source_files": len(source_hashes),
                 "top_100_sha256": manifest["selection_provenance"]["top_100_sha256"],
             },
             ensure_ascii=False,
