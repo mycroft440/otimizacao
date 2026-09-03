@@ -1,0 +1,39 @@
+from __future__ import annotations
+
+import re
+import sys
+import unittest
+from pathlib import Path
+from unittest import mock
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "optimizer"))
+import config  # noqa: E402
+import optimize_b3_pine as opt  # noqa: E402
+
+
+class WorkflowSupplyChainTests(unittest.TestCase):
+    def test_all_official_actions_are_pinned_to_full_commit_sha(self):
+        pattern = re.compile(r"uses:\s*actions/[^@\s]+@([^\s#]+)")
+        sha40 = re.compile(r"^[0-9a-f]{40}$")
+        failures = []
+        for path in sorted((ROOT / ".github/workflows").glob("*.yml")):
+            text = path.read_text(encoding="utf-8")
+            for ref in pattern.findall(text):
+                if not sha40.fullmatch(ref):
+                    failures.append(f"{path.name}: {ref}")
+        self.assertFalse(failures, "Actions oficiais sem pin imutavel: " + ", ".join(failures))
+
+
+class CanonicalCliDefaultsTests(unittest.TestCase):
+    def test_reference_optimizer_uses_canonical_cost_defaults(self):
+        with mock.patch.object(sys, "argv", ["optimize_b3_pine.py", "--data-root", "x", "--output", "y"]):
+            args = opt.parse_args()
+        self.assertEqual(args.initial_cash, config.DEFAULT_INITIAL_CASH)
+        self.assertEqual(args.fee_bps, config.DEFAULT_FEE_BPS)
+        self.assertEqual(args.slippage_bps, config.DEFAULT_SLIPPAGE_BPS)
+        self.assertEqual(args.odd_lot_extra_bps, config.DEFAULT_ODD_LOT_EXTRA_BPS)
+
+
+if __name__ == "__main__":
+    unittest.main()
