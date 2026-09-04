@@ -10,9 +10,9 @@
 | 2023 | 27.06% | R$ 17374.49 | completo |
 | 2024 | 25.14% | R$ 21743.23 | completo |
 | 2025 | 62.94% | R$ 35428.52 | completo |
-| 2026 | 152.00% | R$ 89280.33 | parcial |
+| 2026 | 157.51% | R$ 91231.67 | parcial |
 
-**Retorno total:** 8828.03%
+**Retorno total:** 9023.17%
 **Media aritmetica somente dos anos completos:** 60.04%
 **Media geometrica somente dos anos completos:** 56.20%
 

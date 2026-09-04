@@ -5,9 +5,9 @@
   "warning_threshold_master_sessions": 5,
   "max_stale_master_sessions_while_invested": 0,
   "terminal_position_price_age": {
-    "date": "2026-09-02",
+    "date": "2026-09-03",
     "holding": "FLRY3",
-    "last_trade_date": "2026-09-02",
+    "last_trade_date": "2026-09-03",
     "stale_master_sessions": 0
   },
   "warning_count": 0,

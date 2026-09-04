@@ -4,12 +4,12 @@
   "momentum_period": 49,
   "vol_period": 2,
   "start": "2018-01-02",
-  "end": "2026-09-02",
+  "end": "2026-09-03",
   "initial_cash": 1000.0,
-  "final_equity": 89280.3256287439,
-  "profit": 88280.3256287439,
-  "total_return": 88.2803256287439,
-  "cagr": 0.6792607604643637,
+  "final_equity": 91231.6656287439,
+  "profit": 90231.6656287439,
+  "total_return": 90.2316656287439,
+  "cagr": 0.6831789241270008,
   "average_complete_year_return": 0.6004442851746845,
   "geometric_mean_complete_year_return": 0.5619571696415018,
   "annual_returns": {
@@ -21,7 +21,7 @@
     "2023": 0.2705955710014827,
     "2024": 0.25144610650455035,
     "2025": 0.6294043445214328,
-    "2026": 1.5200130981805309
+    "2026": 1.5750913287355095
   },
   "annual_years": [
     {
@@ -107,21 +107,21 @@
     {
       "year": 2026,
       "start_equity": 35428.51649985668,
-      "end_equity": 89280.3256287439,
-      "return": 1.5200130981805309,
-      "return_pct": 152.00130981805307,
+      "end_equity": 91231.6656287439,
+      "return": 1.5750913287355104,
+      "return_pct": 157.50913287355104,
       "first_observation": "2026-01-02",
-      "last_observation": "2026-09-02",
+      "last_observation": "2026-09-03",
       "complete_year": false
     }
   ],
   "max_drawdown": -0.44334479909730506,
   "max_drawdown_close_to_close": -0.44334479909730506,
-  "annual_volatility": 0.4328402069094233,
-  "annual_volatility_close_to_close": 0.4328402069094232,
-  "sharpe": 1.436703950008414,
-  "sharpe_rf0_close_to_close": 1.436703950008413,
-  "calmar_close_to_close": 1.5321275040271307,
+  "annual_volatility": 0.4327905331454961,
+  "annual_volatility_close_to_close": 0.432790533145496,
+  "sharpe": 1.4421051040672999,
+  "sharpe_rf0_close_to_close": 1.4421051040672992,
+  "calmar_close_to_close": 1.5409652386089163,
   "trades": 491,
   "skipped_executions": 0,
   "fees_paid": 2511.326656017124,
@@ -135,11 +135,11 @@
     "volatility": "sample standard deviation of daily close-to-close returns"
   },
   "schema_version": 2,
-  "mark_to_market_equity": 89280.3256287439,
-  "liquidation_equity_estimate": 89161.70827100564,
-  "liquidation_cost_estimate": 118.61735773825,
-  "liquidation_return_estimate": 88.16170827100564,
-  "terminal_mark_price_inferred": 19.67,
+  "mark_to_market_equity": 91231.66562874387,
+  "liquidation_equity_estimate": 91110.45521234637,
+  "liquidation_cost_estimate": 121.21041639749997,
+  "liquidation_return_estimate": 90.11045521234637,
+  "terminal_mark_price_inferred": 20.099999999999994,
   "annual_coverage": [
     {
       "year": 2018,
@@ -224,15 +224,15 @@
     {
       "year": 2026,
       "start_equity": 35428.51649985668,
-      "end_equity": 89280.3256287439,
-      "return": 1.5200130981805309,
-      "return_pct": 152.00130981805307,
+      "end_equity": 91231.66562874387,
+      "return": 1.5750913287355095,
+      "return_pct": 157.50913287355095,
       "first_observation": "2026-01-02",
-      "last_observation": "2026-09-02",
+      "last_observation": "2026-09-03",
       "complete_year": false
     }
   ],
-  "calmar": 1.5321275040271307,
+  "calmar": 1.5409652386089163,
   "risk_metric_conventions": {
     "drawdown": "daily close-to-close equity",
     "volatility": "sample std of daily close-to-close returns annualized by sqrt(252)",

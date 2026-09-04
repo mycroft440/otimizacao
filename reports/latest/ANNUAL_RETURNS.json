@@ -2,9 +2,9 @@
   "status": "PASS",
   "schema_version": 2,
   "initial_cash": 1000.0,
-  "final_equity": 89280.3256287439,
-  "total_return": 88.2803256287439,
-  "total_return_pct": 8828.03256287439,
+  "final_equity": 91231.66562874387,
+  "total_return": 90.23166562874387,
+  "total_return_pct": 9023.166562874387,
   "complete_years": 8,
   "average_complete_year_return": 0.6004442851746845,
   "average_complete_year_return_pct": 60.044428517468454,
@@ -94,11 +94,11 @@
     {
       "year": 2026,
       "start_equity": 35428.51649985668,
-      "end_equity": 89280.3256287439,
-      "return": 1.5200130981805309,
-      "return_pct": 152.00130981805307,
+      "end_equity": 91231.66562874387,
+      "return": 1.5750913287355095,
+      "return_pct": 157.50913287355095,
       "first_observation": "2026-01-02",
-      "last_observation": "2026-09-02",
+      "last_observation": "2026-09-03",
       "complete_year": false
     }
   ]
